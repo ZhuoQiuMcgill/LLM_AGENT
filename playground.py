@@ -14,19 +14,35 @@ history = InMemoryHistoryManager(max_messages=50)
 agent = Agent(
     llm_interface=llm,
     history_manager=history,
-    name="MyAssistant",
-    system_prompt="You are a helpful assistant specialized in Python programming."
+    name="GPT-4o-mini",
+    system_prompt="You are a design expert"
 )
 
 
 # Use the agent
 async def chat():
-    response = await agent.process("Hello! Can you help me with a Python problem?")
-    print(response)
+    # First test the connection to verify API keys and model availability
+    print("Testing connection to LLM...")
+    try:
+        test_response = await agent.connection_test()
+        print(f"Connection test result: {test_response}")
+    except Exception as e:
+        print(f"Connection test failed: {str(e)}")
+        return  # Exit if connection test fails
+
+    # Now proceed with normal conversation if connection test passed
+    print("\nStarting conversation...")
+    prompt = "Hello! Can you help me design problem?"
+    print(f'User:\n {prompt}\n')
+
+    response = await agent.process(prompt)
+    print(f'{agent.name}:\n {response}\n')
 
     # Continue the conversation
-    response = await agent.process("How do I create a list comprehension?")
-    print(response)
+    prompt = "Please design a house that can travel from one location to another location."
+    print(f'User:\n {prompt}\n')
+    response = await agent.process(prompt)
+    print(f'{agent.name}:\n {response}\n')
 
 
 # Run the async function
