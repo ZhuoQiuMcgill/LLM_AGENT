@@ -132,7 +132,19 @@ class GPTModel(LLMInterface):
 
         except openai.RateLimitError as e:
             logger.error(f"OpenAI rate limit exceeded: {str(e)}")
-            raise LLMAPIError("OpenAI rate limit exceeded. Please try again later or reduce request frequency.")
+            error_message = str(e)
+
+            # Check if the error is due to insufficient quota (billing)
+            if "insufficient_quota" in error_message:
+                raise LLMAPIError(
+                    "OpenAI API quota exceeded. Please check your billing details and plan limits at "
+                    "https://platform.openai.com/account/billing"
+                )
+            else:
+                # This is a temporary rate limit, not a billing issue
+                raise LLMAPIError(
+                    "OpenAI API rate limit exceeded. Please try again later or reduce request frequency."
+                )
 
         except openai.APIError as e:
             logger.error(f"OpenAI API error: {str(e)}")
