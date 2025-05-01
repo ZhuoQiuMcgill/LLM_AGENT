@@ -20,8 +20,8 @@ This module provides a unified Agent abstraction that encapsulates core LLM inte
 Clone the repository:
 
 ```bash
-git clone https://github.com/yourusername/llm-agent-module.git
-cd llm-agent-module
+git clone https://github.com/ZhuoQiuMcgill/LLM_AGENT.git
+cd LLM_AGENT
 ```
 
 Install dependencies:
