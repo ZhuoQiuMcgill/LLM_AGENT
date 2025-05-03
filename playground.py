@@ -19,7 +19,10 @@ ROM_PROMPT_PATH = os.path.join(os.getcwd(), "prompt", "ROM.md")
 SYSTEM_INSTRUCTION = get_prompt(ROM_PROMPT_PATH)
 
 # Create an LLM implementation
-llm = GPTModel(model="o4-mini-2025-04-16")
+llm = GPTModel(
+    model="o4-mini-2025-04-16",
+    temperature=1,
+)
 
 # Create a history manager (optional, Agent will create one if not provided)
 history = InMemoryHistoryManager(max_messages=50)
@@ -35,7 +38,7 @@ agent = Agent(
 
 # Use the agent
 async def chat():
-    '''
+
     # First test the connection to verify API keys and model availability
     print("Testing connection to LLM...")
     try:
@@ -44,7 +47,7 @@ async def chat():
     except Exception as e:
         print(f"Connection test failed: {str(e)}")
         return  # Exit if connection test fails
-    '''
+
 
     # Now proceed with normal conversation if connection test passed
     print("\nStarting conversation...")
