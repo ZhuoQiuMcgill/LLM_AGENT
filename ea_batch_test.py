@@ -75,11 +75,11 @@ async def steps_ea_batch_test(inputs, agents):
     for i, input_text in enumerate(tqdm(inputs, desc="Processing sentences")):
         result = input_text
         for j, agent in enumerate(agents):
-            print(f'Prompt: {result}')
+            print(f'Prompt: {agent.system_prompt}')
             response = await agent.process(result)
             result = f'{result}\n---\n### Step{j + 1}: \n{response}'
             print(f'step{j + 1} completed!')
-            print(result)
+            print(f'Result: {result}')
         filename = f"MultiSteps-{agents[0].model_name()}"
         save_as_md(result, os.path.join(OUTPUT_DIR, filename))
 
