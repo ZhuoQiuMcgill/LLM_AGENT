@@ -38,3 +38,7 @@ class LLMInterface(abc.ABC):
             ConfigurationError: If there's a configuration issue.
         """
         pass
+
+    @abc.abstractmethod
+    def model_name(self):
+        pass

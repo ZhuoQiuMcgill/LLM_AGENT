@@ -140,17 +140,20 @@ class Agent:
             # Create a test prompt
             test_prompt = f"This is a test message for {model_name}. If you receive and understand this message, please respond with: '{model_name} connection successful'"
 
-            # Prepare configuration
-            request_config = self._prepare_request_config(config)
+            # Create a test-specific config that doesn't include the system prompt
+            test_config = {} if config is None else config.copy()
+            # Explicitly set system_prompt to None for connection tests
+            test_config["system_prompt"] = None
 
-            # Get conversation history (but we won't update it)
-            history = self.history_manager.get_history()
+            # Use an empty history list for connection tests
+            # This prevents any previous conversation context from affecting the test
+            empty_history = []
 
             # Generate response using the LLM
             response = await self.llm.generate_response(
                 prompt=test_prompt,
-                history=history,
-                config=request_config
+                history=empty_history,
+                config=test_config
             )
 
             logger.debug(f"Agent {self.name} performed connection test with model {model_name}")
@@ -189,3 +192,6 @@ class Agent:
         """
         self.history_manager.clear()
         logger.debug(f"History reset for Agent {self.name}")
+
+    def model_name(self):
+        return self.llm.model_name()

@@ -23,7 +23,7 @@ class GPTModel(LLMInterface):
     """
 
     # Define prefixes for models known or suspected to use max_completion_tokens
-    MODELS_USING_MAX_COMPLETION_TOKENS_PREFIXES = ("o4-", "gpt-4o-")
+    MODELS_USING_MAX_COMPLETION_TOKENS_PREFIXES = ("o4-", "gpt-4o-", "o3-")
 
     def __init__(
             self,
@@ -31,8 +31,8 @@ class GPTModel(LLMInterface):
             api_key: Optional[str] = None,
             organization: Optional[str] = None,
             # Keep generic name for constructor, map later
-            max_output_tokens: int = 1500,
-            temperature: float = 0.7,
+            max_output_tokens: int = 8192,
+            temperature: float = 1,
             default_system_prompt: Optional[str] = None,
     ):
         """
@@ -286,3 +286,6 @@ class GPTModel(LLMInterface):
         messages.append({"role": "user", "content": prompt})
 
         return messages
+
+    def model_name(self):
+        return self.model

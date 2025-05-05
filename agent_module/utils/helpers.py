@@ -4,7 +4,7 @@ Utility functions for the agent module.
 
 import os
 import logging
-from typing import Optional
+from typing import Optional, List, Union, Tuple
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -118,3 +118,192 @@ def setup_logging(
     )
 
     logger.debug("Logging setup complete")
+
+
+def validate_file_path(filepath: str) -> str:
+    """
+    Validate and normalize file path.
+
+    Args:
+        filepath: Path to validate
+
+    Returns:
+        Absolute path
+    """
+    return os.path.abspath(filepath)
+
+
+def validate_readable_file(filepath: str, max_size_mb: int = 100) -> None:
+    """
+    Validate that a file exists, is readable, and not too large.
+
+    Args:
+        filepath: Path to the file
+        max_size_mb: Maximum allowed file size in MB
+
+    Raises:
+        FileNotFoundError: If file doesn't exist
+        ValueError: If not a regular file or too large
+        PermissionError: If no read permission
+    """
+    filepath = validate_file_path(filepath)
+
+    # Check if file exists
+    if not os.path.exists(filepath):
+        raise FileNotFoundError(f"File not found: {filepath}")
+
+    # Check if it's a regular file (not a directory or device)
+    if not os.path.isfile(filepath):
+        raise ValueError(f"Not a regular file: {filepath}")
+
+    # Check read permissions
+    if not os.access(filepath, os.R_OK):
+        raise PermissionError(f"No read permission for {filepath}")
+
+    # Check file size to prevent memory issues
+    max_size_bytes = max_size_mb * 1024 * 1024
+    file_size = os.path.getsize(filepath)
+    if file_size > max_size_bytes:
+        raise ValueError(f"File too large ({file_size} bytes). Maximum size is {max_size_mb}MB")
+
+
+def read_file_content(filepath: str, as_lines: bool = False) -> Union[str, List[str]]:
+    """
+    Read content from a file with proper encoding and error handling.
+
+    Args:
+        filepath: Path to the file
+        as_lines: If True, return a list of lines, else return the entire content
+
+    Returns:
+        File content as string or list of lines
+
+    Raises:
+        Various IOError exceptions if reading fails
+    """
+    # Validate the file
+    validate_readable_file(filepath)
+
+    # Try reading with UTF-8 encoding first
+    try:
+        with open(filepath, 'r', encoding='utf-8', errors='replace') as file:
+            if as_lines:
+                lines = file.readlines()
+                return [line.rstrip('\n') for line in lines]
+            else:
+                return file.read()
+    except UnicodeDecodeError:
+        # Fallback to latin-1 encoding if utf-8 fails
+        try:
+            with open(filepath, 'r', encoding='latin-1') as file:
+                if as_lines:
+                    lines = file.readlines()
+                    return [line.rstrip('\n') for line in lines]
+                else:
+                    return file.read()
+        except Exception as e:
+            raise IOError(f"Failed to read file with multiple encodings: {e}")
+    except Exception as e:
+        raise IOError(f"Failed to read file: {e}")
+
+
+def validate_writable_path(filepath: str, create_dirs: bool = True) -> Tuple[str, str]:
+    """
+    Validate that a file path is writable and optionally create directories.
+
+    Args:
+        filepath: Path to validate
+        create_dirs: Whether to create missing directories
+
+    Returns:
+        Tuple of (normalized filepath, directory)
+
+    Raises:
+        IOError: If directory creation fails
+        PermissionError: If writing is not allowed
+    """
+    filepath = validate_file_path(filepath)
+    directory = os.path.dirname(filepath)
+
+    # Create directories if they don't exist
+    if create_dirs and directory and not os.path.exists(directory):
+        try:
+            os.makedirs(directory)
+        except (OSError, PermissionError) as e:
+            raise IOError(f"Failed to create directory: {e}")
+
+    # Check write permissions
+    try:
+        # Check if file exists and we can write to it
+        if os.path.exists(filepath):
+            if not os.access(filepath, os.W_OK):
+                raise PermissionError(f"No write permission for {filepath}")
+        # Check if we can write to the directory
+        elif directory and not os.access(directory, os.W_OK):
+            raise PermissionError(f"No write permission for directory {directory}")
+    except Exception as e:
+        raise IOError(f"Permission check failed: {e}")
+
+    return filepath, directory
+
+
+def get_sentences(filepath: str) -> List[str]:
+    """
+    Read a file and return its content as a list of lines.
+
+    Args:
+        filepath: Path to the file
+
+    Returns:
+        List of strings, one per line
+
+    Raises:
+        Various exceptions if reading fails
+    """
+    return read_file_content(filepath, as_lines=True)
+
+
+def get_prompt(filepath: str) -> str:
+    """
+    Read a file and return its entire content as a string.
+
+    Args:
+        filepath: Path to the file
+
+    Returns:
+        File content as a string
+
+    Raises:
+        Various exceptions if reading fails
+    """
+    return read_file_content(filepath, as_lines=False)
+
+
+def save_as_md(content: str, filepath: str) -> str:
+    """
+    Save a string as a markdown file.
+
+    Args:
+        content: Content to save
+        filepath: Path where to save the file
+
+    Returns:
+        Absolute path to the saved file
+
+    Raises:
+        Various exceptions if writing fails
+    """
+    # Ensure filepath has .md extension
+    if not filepath.endswith('.md'):
+        filepath += '.md'
+
+    # Validate the path is writable
+    filepath, _ = validate_writable_path(filepath)
+
+    # Write file with proper encoding and error handling
+    try:
+        with open(filepath, 'w', encoding='utf-8') as file:
+            file.write(content)
+        return filepath
+    except Exception as e:
+        raise IOError(f"Failed to write file: {e}")

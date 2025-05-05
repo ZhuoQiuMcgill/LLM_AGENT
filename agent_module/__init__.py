@@ -32,7 +32,7 @@ except ImportError:
 from .history.memory import HistoryManager, InMemoryHistoryManager
 from .exceptions import AgentError, LLMAPIError, ConfigurationError, HistoryError
 from .config import load_config, create_llm_config
-from .utils.helpers import load_env_file, get_api_key, setup_logging
+from .utils.helpers import load_env_file, get_api_key, setup_logging, get_prompt, get_sentences, save_as_md
 
 # Export public API
 __all__ = [
@@ -58,6 +58,9 @@ __all__ = [
     "load_env_file",
     "get_api_key",
     "setup_logging",
+    "get_sentences",
+    "get_prompt",
+    "save_as_md"
 ]
 
 # Set up package version
