@@ -6,6 +6,7 @@ import os
 import logging
 from typing import Optional, List, Union, Tuple
 from pathlib import Path
+import json
 
 from dotenv import load_dotenv
 
@@ -307,3 +308,29 @@ def save_as_md(content: str, filepath: str) -> str:
         return filepath
     except Exception as e:
         raise IOError(f"Failed to write file: {e}")
+
+
+def read_json_to_dict(file_path):
+    """
+    Read a JSON file and return its contents as a Python dictionary.
+
+    Args:
+        file_path (str): Path to the JSON file
+
+    Returns:
+        dict: The contents of the JSON file as a dictionary
+
+    Raises:
+        FileNotFoundError: If the file doesn't exist
+        json.JSONDecodeError: If the file contains invalid JSON
+    """
+    try:
+        with open(file_path, 'r', encoding='utf-8') as file:
+            data = json.load(file)
+        return data
+    except FileNotFoundError:
+        print(f"Error: File '{file_path}' not found.")
+        raise
+    except json.JSONDecodeError:
+        print(f"Error: '{file_path}' contains invalid JSON.")
+        raise

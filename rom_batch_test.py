@@ -28,9 +28,9 @@ VERIFICATION_MODEL_NAME = "gemini-2.5-pro-exp-03-25"
 
 GENERATION_AGENT = Agent(
     name="Generation Agent",
-    llm_interface=GeminiModel(
-        model=VERIFICATION_MODEL_NAME,
-        temperature=0,
+    llm_interface=GPTModel(
+        model=GENERATION_MODEL_NAME ,
+        temperature=1,
     ),
     system_prompt=GENERATION_PROMPT
 )
@@ -45,7 +45,7 @@ VERIFICATION_AGENT = Agent(
 )
 
 
-async def batch_test(sentences, verify):
+async def rom_generation_batch_test(sentences, verify):
     # Import tqdm for progress bar
     from tqdm import tqdm
 
@@ -69,4 +69,4 @@ async def batch_test(sentences, verify):
     md_content = "\n---\n".join(results)
     save_as_md(md_content, output_path)
 
-asyncio.run(batch_test(SENTENCES, True))
+asyncio.run(rom_generation_batch_test(SENTENCES, False))
