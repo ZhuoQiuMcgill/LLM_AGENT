@@ -33,7 +33,7 @@ from .history.memory import HistoryManager, InMemoryHistoryManager
 from .exceptions import AgentError, LLMAPIError, ConfigurationError, HistoryError
 from .config import load_config, create_llm_config
 from .utils.helpers import load_env_file, get_api_key, setup_logging, get_prompt, get_sentences, save_as_md, \
-    read_json_to_dict
+    read_json_to_dict, save_as_txt
 
 # Export public API
 __all__ = [
@@ -62,7 +62,8 @@ __all__ = [
     "get_sentences",
     "get_prompt",
     "save_as_md",
-    "read_json_to_dict"
+    "read_json_to_dict",
+    "save_as_txt"
 ]
 
 # Set up package version

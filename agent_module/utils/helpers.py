@@ -334,3 +334,33 @@ def read_json_to_dict(file_path):
     except json.JSONDecodeError:
         print(f"Error: '{file_path}' contains invalid JSON.")
         raise
+
+
+def save_as_txt(content, filename):
+    """Saves a given string into a .txt file.
+
+    If the file does not exist, it will be created.
+    If the file already exists, its content will be overwritten.
+    The .txt extension is automatically appended to the filename.
+
+    Args:
+      content: The string content to be saved in the file.
+      filename: The desired name of the file, without
+                the .txt extension.
+                Example: "my_document" or "data/report"
+    """
+    # Construct the full filepath by appending .txt
+    filepath = f"{filename}.txt"
+    try:
+        # Open the file in 'w' mode (write mode).
+        # 'w' mode will create the file if it doesn't exist,
+        # and overwrite it if it does exist.
+        with open(filepath, 'w') as file:
+            file.write(content)
+        print(f"Content successfully saved to: {filepath}")
+    except IOError as e:
+        # Handles errors like permission issues, or if the path is a directory.
+        print(f"Error: Could not write to file at {filepath}. IOError: {e}")
+    except Exception as e:
+        # Handles any other unexpected errors.
+        print(f"An unexpected error occurred: {e}")

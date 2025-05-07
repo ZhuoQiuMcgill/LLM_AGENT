@@ -45,7 +45,7 @@ class GeminiModel(LLMInterface):
             model: str = "gemini-pro",
             api_key: Optional[str] = None,
             temperature: float = 0.7,
-            max_output_tokens: int = 8196,
+            max_output_tokens: int = 65536,
             top_p: float = 0.95,
             top_k: int = 40,
             default_system_prompt: Optional[str] = None,
