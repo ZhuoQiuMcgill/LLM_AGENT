@@ -129,8 +129,8 @@ env.bak/
 venv.bak/
 .idea/
 prompt/
-.scripts/
-.data/
+scripts/
+data/
 # Spyder project settings
 .spyderproject
 .spyproject
