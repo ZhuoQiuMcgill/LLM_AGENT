@@ -280,36 +280,6 @@ def get_prompt(filepath: str) -> str:
     return read_file_content(filepath, as_lines=False)
 
 
-def save_as_md(content: str, filepath: str) -> str:
-    """
-    Save a string as a markdown file.
-
-    Args:
-        content: Content to save
-        filepath: Path where to save the file
-
-    Returns:
-        Absolute path to the saved file
-
-    Raises:
-        Various exceptions if writing fails
-    """
-    # Ensure filepath has .md extension
-    if not filepath.endswith('.md'):
-        filepath += '.md'
-
-    # Validate the path is writable
-    filepath, _ = validate_writable_path(filepath)
-
-    # Write file with proper encoding and error handling
-    try:
-        with open(filepath, 'w', encoding='utf-8') as file:
-            file.write(content)
-        return filepath
-    except Exception as e:
-        raise IOError(f"Failed to write file: {e}")
-
-
 def read_json_to_dict(file_path):
     """
     Read a JSON file and return its contents as a Python dictionary.
@@ -336,31 +306,49 @@ def read_json_to_dict(file_path):
         raise
 
 
-def save_as_txt(content, filename):
-    """Saves a given string into a .txt file.
-
-    If the file does not exist, it will be created.
-    If the file already exists, its content will be overwritten.
-    The .txt extension is automatically appended to the filename.
+def save_content(content: str, filename: str, filetype: str = None) -> str:
+    """
+    Save content to a file with the specified file type extension.
 
     Args:
-      content: The string content to be saved in the file.
-      filename: The desired name of the file, without
-                the .txt extension.
-                Example: "my_document" or "data/report"
+        content: Content to save
+        filename: Name of the file without extension (e.g., "my_document" or "data/report")
+        filetype: File extension to use (without the dot). If None, will
+                  default to 'txt'. Supported types: 'txt', 'md', 'html'
+
+    Returns:
+        Absolute path to the saved file
+
+    Raises:
+        ValueError: If an unsupported file type is provided
+        Various IOError exceptions if writing fails
     """
-    # Construct the full filepath by appending .txt
-    filepath = f"{filename}.txt"
+    # Determine file type
+    supported_types = ['txt', 'md', 'html']
+
+    if filetype is None:
+        filetype = 'txt'  # Default to txt if no filetype specified
+
+    # Validate filetype
+    if filetype not in supported_types:
+        raise ValueError(f"Unsupported file type: {filetype}. Supported types: {', '.join(supported_types)}")
+
+    # Remove any existing extension from the filename
+    base_filename = os.path.splitext(filename)[0]
+
+    # Create filepath with the correct extension
+    filepath = f"{base_filename}.{filetype}"
+
+    # Validate the path is writable
+    filepath, _ = validate_writable_path(filepath)
+
+    # Write file with proper encoding and error handling
     try:
-        # Open the file in 'w' mode (write mode).
-        # 'w' mode will create the file if it doesn't exist,
-        # and overwrite it if it does exist.
-        with open(filepath, 'w') as file:
+        with open(filepath, 'w', encoding='utf-8') as file:
             file.write(content)
-        print(f"Content successfully saved to: {filepath}")
-    except IOError as e:
-        # Handles errors like permission issues, or if the path is a directory.
-        print(f"Error: Could not write to file at {filepath}. IOError: {e}")
+        logger.debug(f"Content successfully saved to: {filepath}")
+        return filepath
     except Exception as e:
-        # Handles any other unexpected errors.
-        print(f"An unexpected error occurred: {e}")
+        error_msg = f"Failed to write file: {e}"
+        logger.error(error_msg)
+        raise IOError(error_msg)
