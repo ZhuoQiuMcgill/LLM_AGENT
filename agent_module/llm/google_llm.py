@@ -122,6 +122,10 @@ class GeminiModel(LLMInterface):
                 "top_k": request_config.get("top_k", self.top_k),
             }
 
+            # Reinitialize API configuration to ensure fresh state
+            genai.configure(api_key=self.api_key)
+
+            # Create a fresh model instance each time to avoid event loop issues
             model = genai.GenerativeModel(
                 model_name=request_config.get("model", self.model),
                 generation_config=generation_config,
@@ -141,7 +145,7 @@ class GeminiModel(LLMInterface):
             logger.debug(f"Sending request to Google AI API")
 
             # Make the API call
-            response: AsyncGenerateContentResponse = await chat.send_message_async(prompt)
+            response = await chat.send_message_async(prompt)
 
             # Extract and return the response text
             return response.text
