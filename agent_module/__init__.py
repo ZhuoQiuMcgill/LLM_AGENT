@@ -63,7 +63,7 @@ __all__ = [
     "get_sentences",
     "get_prompt",
     "save_content",
-    "read_json_to_dict",
+    "read_json_to_dict"
 ]
 
 # Set up package version
