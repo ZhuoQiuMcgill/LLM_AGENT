@@ -1,5 +1,6 @@
 import os
 import logging
+import base64
 from typing import Dict, List, Optional, Any
 
 # Use original imports
@@ -225,6 +226,292 @@ class GPTModel(LLMInterface):
             # Catch unexpected errors and wrap in LLMAPIError as per original pattern
             logger.error(f"Unexpected error during OpenAI API call: {e}", exc_info=True)
             raise LLMAPIError(f"An unexpected error occurred: {e}") from e
+
+    async def process_with_image(
+            self,
+            text: str,
+            image_path: str,
+            history: Optional[List[Dict[str, str]]] = None,
+            config: Optional[Dict[str, Any]] = None
+    ) -> str:
+        """
+        Generate a response from the GPT model using both text and image inputs.
+
+        Args:
+            text: The text prompt to send to the model.
+            image_path: Path to the image file to include with the prompt.
+            history: Optional conversation history as a list of message dictionaries.
+            config: Optional configuration parameters for this specific request.
+
+        Returns:
+            A string containing the model's primary text response.
+
+        Raises:
+            LLMAPIError: If there's an error with the OpenAI API call or response parsing.
+        """
+        try:
+            # Get request configuration by merging default and request-specific configs
+            request_config = self._prepare_request_config(config)
+            current_model = request_config.get("model", self.model)
+            current_temperature = request_config.get("temperature", self.temperature)
+
+            # Ensure vision-compatible model
+            if not ("vision" in current_model or current_model == "gpt-4o"):
+                logger.warning(
+                    f"Model {current_model} may not support vision capabilities. Consider using 'gpt-4-vision-preview' or 'gpt-4o'.")
+
+            # Read and encode image
+            if not os.path.exists(image_path):
+                raise FileNotFoundError(f"Image file not found: {image_path}")
+
+            with open(image_path, "rb") as image_file:
+                image_data = base64.b64encode(image_file.read()).decode('utf-8')
+
+            # Prepare messages
+            messages = []
+
+            # Add system message if provided
+            system_prompt = request_config.get("system_prompt")
+            if system_prompt:
+                messages.append({"role": "system", "content": system_prompt})
+
+            # Add history if provided
+            if history:
+                for msg in history:
+                    if isinstance(msg, dict) and "role" in msg and "content" in msg:
+                        messages.append(msg)
+                    else:
+                        logger.warning(f"Skipping invalid history item: {msg}")
+
+            # Add user message with text and image
+            user_message = {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": text},
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{image_data}"
+                        }
+                    }
+                ]
+            }
+            messages.append(user_message)
+
+            logger.debug(f"Sending request to OpenAI API ({current_model}) with text and image.")
+
+            # Create API parameters
+            api_params = {
+                "model": current_model,
+                "messages": messages,
+                "temperature": current_temperature,
+            }
+
+            # Set max_tokens parameter appropriately
+            if current_model.startswith(self.MODELS_USING_MAX_COMPLETION_TOKENS_PREFIXES):
+                api_params["max_completion_tokens"] = request_config.get("max_output_tokens", self.max_output_tokens)
+            else:
+                api_params["max_tokens"] = request_config.get("max_output_tokens", self.max_output_tokens)
+
+            # Add other parameters from config
+            if 'top_p' in request_config:
+                api_params['top_p'] = request_config['top_p']
+            if 'frequency_penalty' in request_config:
+                api_params['frequency_penalty'] = request_config['frequency_penalty']
+            if 'presence_penalty' in request_config:
+                api_params['presence_penalty'] = request_config['presence_penalty']
+            if 'stop' in request_config:
+                api_params['stop'] = request_config['stop']
+
+            # Make API call
+            response = await self.client.chat.completions.create(**api_params)
+
+            logger.debug(
+                f"Received response from OpenAI API. Finish reason: {response.choices[0].finish_reason if response.choices else 'N/A'}")
+
+            # Extract response
+            if response.choices and len(response.choices) > 0:
+                message = response.choices[0].message
+                if message and message.content is not None:
+                    response_text = message.content.strip()
+                    logger.debug(f"Extracted response text (length: {len(response_text)}).")
+                    return response_text
+                else:
+                    logger.warning("OpenAI response message content is missing or None.")
+                    return ""
+            else:
+                logger.warning("OpenAI response does not contain 'choices'.")
+                raise LLMAPIError("OpenAI response structure invalid: No choices found.")
+
+        except FileNotFoundError as e:
+            logger.error(f"Image file error: {e}", exc_info=True)
+            raise LLMAPIError(f"Image file error: {e}")
+        except AuthenticationError as e:
+            logger.error(f"OpenAI authentication error: {e}", exc_info=True)
+            raise LLMAPIError(f"Authentication failed: {str(e)}")
+        except RateLimitError as e:
+            logger.warning(f"OpenAI rate limit exceeded: {e}", exc_info=True)
+            raise LLMAPIError(f"Rate limit exceeded: {str(e)}")
+        except BadRequestError as e:
+            logger.error(f"OpenAI bad request error: {e}", exc_info=True)
+            raise LLMAPIError(f"Invalid request: {str(e)}")
+        except APIError as e:
+            logger.error(f"OpenAI API error: {e}", exc_info=True)
+            raise LLMAPIError(f"OpenAI API returned an error: {str(e)}")
+        except OpenAIError as e:
+            logger.error(f"General OpenAI error: {e}", exc_info=True)
+            raise LLMAPIError(f"An OpenAI error occurred: {str(e)}")
+        except Exception as e:
+            logger.error(f"Unexpected error during OpenAI API call: {e}", exc_info=True)
+            raise LLMAPIError(f"An unexpected error occurred: {str(e)}")
+
+    async def process_with_image_bin(
+            self,
+            text: str,
+            image_data: bytes,
+            mime_type: Optional[str] = None,
+            history: Optional[List[Dict[str, str]]] = None,
+            config: Optional[Dict[str, Any]] = None
+    ) -> str:
+        """
+        Generate a response from the GPT model using both text and binary image data.
+
+        This method is useful for processing images directly from memory without saving to disk,
+        such as handling file uploads in web applications.
+
+        Args:
+            text: The text prompt to send to the model.
+            image_data: Binary image data.
+            mime_type: Optional MIME type of the image (e.g., "image/jpeg", "image/png").
+                      If None, defaults to "image/jpeg".
+            history: Optional conversation history as a list of message dictionaries.
+            config: Optional configuration parameters for this specific request.
+
+        Returns:
+            A string containing the model's primary text response.
+
+        Raises:
+            LLMAPIError: If there's an error with the OpenAI API call or response parsing.
+        """
+        try:
+            # Validate image data
+            if not image_data:
+                raise ValueError("Image data is empty")
+
+            # Get request configuration by merging default and request-specific configs
+            request_config = self._prepare_request_config(config)
+            current_model = request_config.get("model", self.model)
+            current_temperature = request_config.get("temperature", self.temperature)
+
+            # Ensure vision-compatible model
+            if not ("vision" in current_model or current_model == "gpt-4o"):
+                logger.warning(
+                    f"Model {current_model} may not support vision capabilities. Consider using 'gpt-4-vision-preview' or 'gpt-4o'.")
+
+            # Use default MIME type if none provided
+            if not mime_type:
+                mime_type = "image/jpeg"
+
+            # Base64 encode the binary image data
+            image_b64 = base64.b64encode(image_data).decode('utf-8')
+
+            # Prepare messages
+            messages = []
+
+            # Add system message if provided
+            system_prompt = request_config.get("system_prompt")
+            if system_prompt:
+                messages.append({"role": "system", "content": system_prompt})
+
+            # Add history if provided
+            if history:
+                for msg in history:
+                    if isinstance(msg, dict) and "role" in msg and "content" in msg:
+                        messages.append(msg)
+                    else:
+                        logger.warning(f"Skipping invalid history item: {msg}")
+
+            # Add user message with text and image
+            user_message = {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": text},
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:{mime_type};base64,{image_b64}"
+                        }
+                    }
+                ]
+            }
+            messages.append(user_message)
+
+            logger.debug(f"Sending request to OpenAI API ({current_model}) with text and binary image data.")
+
+            # Create API parameters
+            api_params = {
+                "model": current_model,
+                "messages": messages,
+                "temperature": current_temperature,
+            }
+
+            # Set max_tokens parameter appropriately
+            if current_model.startswith(self.MODELS_USING_MAX_COMPLETION_TOKENS_PREFIXES):
+                api_params["max_completion_tokens"] = request_config.get("max_output_tokens", self.max_output_tokens)
+            else:
+                api_params["max_tokens"] = request_config.get("max_output_tokens", self.max_output_tokens)
+
+            # Add other parameters from config
+            if 'top_p' in request_config:
+                api_params['top_p'] = request_config['top_p']
+            if 'frequency_penalty' in request_config:
+                api_params['frequency_penalty'] = request_config['frequency_penalty']
+            if 'presence_penalty' in request_config:
+                api_params['presence_penalty'] = request_config['presence_penalty']
+            if 'stop' in request_config:
+                api_params['stop'] = request_config['stop']
+
+            # Make API call
+            response = await self.client.chat.completions.create(**api_params)
+
+            logger.debug(
+                f"Received response from OpenAI API. Finish reason: {response.choices[0].finish_reason if response.choices else 'N/A'}")
+
+            # Extract response
+            if response.choices and len(response.choices) > 0:
+                message = response.choices[0].message
+                if message and message.content is not None:
+                    response_text = message.content.strip()
+                    logger.debug(f"Extracted response text (length: {len(response_text)}).")
+                    return response_text
+                else:
+                    logger.warning("OpenAI response message content is missing or None.")
+                    return ""
+            else:
+                logger.warning("OpenAI response does not contain 'choices'.")
+                raise LLMAPIError("OpenAI response structure invalid: No choices found.")
+
+        except ValueError as e:
+            logger.error(f"Image data error: {e}", exc_info=True)
+            raise LLMAPIError(f"Image data error: {e}")
+        except AuthenticationError as e:
+            logger.error(f"OpenAI authentication error: {e}", exc_info=True)
+            raise LLMAPIError(f"Authentication failed: {str(e)}")
+        except RateLimitError as e:
+            logger.warning(f"OpenAI rate limit exceeded: {e}", exc_info=True)
+            raise LLMAPIError(f"Rate limit exceeded: {str(e)}")
+        except BadRequestError as e:
+            logger.error(f"OpenAI bad request error: {e}", exc_info=True)
+            raise LLMAPIError(f"Invalid request: {str(e)}")
+        except APIError as e:
+            logger.error(f"OpenAI API error: {e}", exc_info=True)
+            raise LLMAPIError(f"OpenAI API returned an error: {str(e)}")
+        except OpenAIError as e:
+            logger.error(f"General OpenAI error: {e}", exc_info=True)
+            raise LLMAPIError(f"An OpenAI error occurred: {str(e)}")
+        except Exception as e:
+            logger.error(f"Unexpected error during OpenAI API call: {e}", exc_info=True)
+            raise LLMAPIError(f"An unexpected error occurred: {str(e)}")
 
     def _prepare_request_config(self, config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """

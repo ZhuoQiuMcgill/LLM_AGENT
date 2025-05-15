@@ -24,7 +24,7 @@ from .llm.openai_llm import GPTModel
 
 # Import GeminiModel conditionally to avoid crashing on missing dependencies
 try:
-    from .llm.google_llm import GeminiModel
+    from .llm.google_llm import GeminiModel, MissingDependencyError
 except ImportError:
     logger.warning("Google Gemini support is not available. Install required dependencies with: "
                    "pip install google-generativeai")
@@ -44,6 +44,7 @@ __all__ = [
     "GeminiModel",
     "HistoryManager",
     "InMemoryHistoryManager",
+    "MissingDependencyError",
 
     # Exceptions
     "AgentError",
@@ -66,4 +67,4 @@ __all__ = [
 ]
 
 # Set up package version
-__version__ = "1.0.0"
+__version__ = "1.0.3"

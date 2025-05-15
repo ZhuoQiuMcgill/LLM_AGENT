@@ -5,6 +5,7 @@ Google Gemini implementation of the LLM interface.
 import os
 import logging
 import importlib.util
+import mimetypes
 from typing import Dict, List, Optional, Any
 
 # Check if google-generativeai package is installed
@@ -153,6 +154,263 @@ class GeminiModel(LLMInterface):
         except Exception as e:
             logger.error(f"Google AI API error: {str(e)}")
             raise LLMAPIError(f"Error calling Google AI API: {str(e)}")
+
+    async def process_with_image(
+            self,
+            text: str,
+            image_path: str,
+            history: Optional[List[Dict[str, str]]] = None,
+            config: Optional[Dict[str, Any]] = None
+    ) -> str:
+        """
+        Generate a response from the Gemini model using both text and image inputs.
+
+        Args:
+            text: The text prompt to send to the model.
+            image_path: Path to the image file to include with the prompt.
+            history: Optional conversation history as a list of message dictionaries.
+            config: Optional configuration parameters for this specific request.
+
+        Returns:
+            A string containing the model's response.
+
+        Raises:
+            LLMAPIError: If there's an error with the Google AI API call.
+            MissingDependencyError: If the required packages are not installed.
+        """
+        try:
+            if not _HAS_GOOGLE_GENERATIVEAI:
+                raise MissingDependencyError(
+                    "The 'google-generativeai' package is required to use GeminiModel with images. "
+                    "Please install it using: pip install google-generativeai"
+                )
+
+            # Get request configuration
+            request_config = self._prepare_request_config(config)
+
+            # For image processing, use vision-capable model
+            current_model = request_config.get("model", self.model)
+            if "vision" not in current_model:
+                current_model = "gemini-pro-vision"
+                logger.info(f"Switched to vision-capable model: {current_model}")
+
+            # Check if image file exists
+            if not os.path.exists(image_path):
+                raise FileNotFoundError(f"Image file not found: {image_path}")
+
+            # Initialize generation config
+            generation_config = {
+                "temperature": request_config.get("temperature", self.temperature),
+                "max_output_tokens": request_config.get("max_output_tokens", self.max_output_tokens),
+                "top_p": request_config.get("top_p", self.top_p),
+                "top_k": request_config.get("top_k", self.top_k),
+            }
+
+            # Configure API
+            genai.configure(api_key=self.api_key)
+
+            # Create model instance
+            model = genai.GenerativeModel(
+                model_name=current_model,
+                generation_config=generation_config,
+            )
+
+            # Get system prompt
+            system_prompt = request_config.get("system_prompt", self.default_system_prompt)
+
+            # Create final prompt text
+            if system_prompt and not history:
+                prompt_text = f"{system_prompt}\n\n{text}"
+            else:
+                prompt_text = text
+
+            logger.debug(f"Sending request to Google AI API with text and image")
+
+            # Try to load and process image using the appropriate API method
+            try:
+                # Method 1: Using built-in image loading
+                if hasattr(genai.types, "Image") and hasattr(genai.types.Image, "from_file"):
+                    image = genai.types.Image.from_file(image_path)
+                    response = await model.generate_content_async([prompt_text, image])
+                # Method 2: Using MIME type and binary data
+                else:
+                    mime_type, _ = mimetypes.guess_type(image_path)
+                    if not mime_type or not mime_type.startswith('image/'):
+                        mime_type = 'image/jpeg'  # Default
+
+                    with open(image_path, "rb") as img_file:
+                        image_data = img_file.read()
+
+                    response = await model.generate_content_async([
+                        {"text": prompt_text},
+                        {"inline_data": {"mime_type": mime_type, "data": image_data}}
+                    ])
+            except Exception as e:
+                # Fallback: Try using PIL if available
+                try:
+                    from PIL import Image
+                    image = Image.open(image_path)
+                    response = await model.generate_content_async([prompt_text, image])
+                except ImportError:
+                    logger.error("Failed to process image with Gemini API and PIL is not available")
+                    raise LLMAPIError(f"Failed to process image with Gemini API: {e}")
+
+            # Extract response text
+            try:
+                if hasattr(response, 'text'):
+                    return response.text
+                elif hasattr(response, 'parts') and response.parts:
+                    return response.parts[0].text
+                else:
+                    logger.warning("Could not extract text from Google AI response")
+                    return str(response)
+            except Exception as e:
+                logger.error(f"Failed to extract text from response: {e}")
+                return ""
+
+        except FileNotFoundError as e:
+            logger.error(f"Image file error: {e}", exc_info=True)
+            raise LLMAPIError(f"Image file error: {e}")
+        except Exception as e:
+            logger.error(f"Error processing image with Google AI: {e}", exc_info=True)
+            raise LLMAPIError(f"Error processing image with Google AI: {e}")
+
+    async def process_with_image_bin(
+            self,
+            text: str,
+            image_data: bytes,
+            mime_type: Optional[str] = None,
+            history: Optional[List[Dict[str, str]]] = None,
+            config: Optional[Dict[str, Any]] = None
+    ) -> str:
+        """
+        Generate a response from the Gemini model using both text and binary image data.
+
+        This method is useful for processing images directly from memory without saving to disk,
+        such as handling file uploads in web applications.
+
+        Args:
+            text: The text prompt to send to the model.
+            image_data: Binary image data.
+            mime_type: Optional MIME type of the image (e.g., "image/jpeg", "image/png").
+                      If None, will attempt to detect or use a default.
+            history: Optional conversation history as a list of message dictionaries.
+            config: Optional configuration parameters for this specific request.
+
+        Returns:
+            A string containing the model's response.
+
+        Raises:
+            LLMAPIError: If there's an error with the Google AI API call.
+            MissingDependencyError: If the required packages are not installed.
+        """
+        try:
+            if not _HAS_GOOGLE_GENERATIVEAI:
+                raise MissingDependencyError(
+                    "The 'google-generativeai' package is required to use GeminiModel with images. "
+                    "Please install it using: pip install google-generativeai"
+                )
+
+            # Validate image data
+            if not image_data:
+                raise ValueError("Image data is empty")
+
+            # Get request configuration
+            request_config = self._prepare_request_config(config)
+
+            # For image processing, use vision-capable model
+            current_model = request_config.get("model", self.model)
+            if "vision" not in current_model:
+                current_model = "gemini-pro-vision"
+                logger.info(f"Switched to vision-capable model: {current_model}")
+
+            # Use default MIME type if not provided
+            if not mime_type:
+                # Try to detect MIME type
+                try:
+                    import magic
+                    mime_type = magic.Magic(mime=True).from_buffer(image_data)
+                except ImportError:
+                    # If python-magic is not available, use default
+                    mime_type = 'image/jpeg'
+                    logger.warning("Could not detect MIME type, using default: image/jpeg")
+
+                # Ensure it's an image MIME type
+                if not mime_type.startswith('image/'):
+                    mime_type = 'image/jpeg'
+                    logger.warning(f"Non-image MIME type detected, using default: {mime_type}")
+
+            # Initialize generation config
+            generation_config = {
+                "temperature": request_config.get("temperature", self.temperature),
+                "max_output_tokens": request_config.get("max_output_tokens", self.max_output_tokens),
+                "top_p": request_config.get("top_p", self.top_p),
+                "top_k": request_config.get("top_k", self.top_k),
+            }
+
+            # Configure API
+            genai.configure(api_key=self.api_key)
+
+            # Create model instance
+            model = genai.GenerativeModel(
+                model_name=current_model,
+                generation_config=generation_config,
+            )
+
+            # Get system prompt
+            system_prompt = request_config.get("system_prompt", self.default_system_prompt)
+
+            # Create final prompt text
+            if system_prompt and not history:
+                prompt_text = f"{system_prompt}\n\n{text}"
+            else:
+                prompt_text = text
+
+            logger.debug(f"Sending request to Google AI API with text and binary image data")
+
+            # Try different methods to process the binary image data
+            try:
+                # Method 1: Using built-in image handling for binary data if available
+                # (available in newer Google AI SDK versions)
+                if hasattr(genai.types, "Image") and hasattr(genai.types.Image, "from_bytes"):
+                    image = genai.types.Image.from_bytes(image_data)
+                    response = await model.generate_content_async([prompt_text, image])
+                # Method 2: Using inline data approach
+                else:
+                    response = await model.generate_content_async([
+                        {"text": prompt_text},
+                        {"inline_data": {"mime_type": mime_type, "data": image_data}}
+                    ])
+            except Exception as e:
+                # Fallback: Try using PIL if available
+                try:
+                    from PIL import Image
+                    import io
+                    image = Image.open(io.BytesIO(image_data))
+                    response = await model.generate_content_async([prompt_text, image])
+                except ImportError:
+                    logger.error("Failed to process binary image with Gemini API and PIL is not available")
+                    raise LLMAPIError(f"Failed to process binary image with Gemini API: {e}")
+
+            # Extract response text
+            try:
+                if hasattr(response, 'text'):
+                    return response.text
+                elif hasattr(response, 'parts') and response.parts:
+                    return response.parts[0].text
+                else:
+                    logger.warning("Could not extract text from Google AI response")
+                    return str(response)
+            except Exception as e:
+                logger.error(f"Failed to extract text from response: {e}")
+                return ""
+
+        except ValueError as e:
+            logger.error(f"Image data error: {e}", exc_info=True)
+            raise LLMAPIError(f"Image data error: {e}")
+        except Exception as e:
+            logger.error(f"Error processing binary image with Google AI: {e}", exc_info=True)
+            raise LLMAPIError(f"Error processing binary image with Google AI: {e}")
 
     def _prepare_request_config(self, config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
