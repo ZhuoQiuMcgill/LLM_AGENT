@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM Agent Module</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/languages/python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/languages/bash.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #6366f1;
+            --secondary-color: #a855f7;
+            --bg-color: #f9fafb;
+            --text-color: #111827;
+            --code-bg: #1f2937;
+            --section-bg: white;
+            --border-color: #e5e7eb;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: var(--text-color);
+            background-color: var(--bg-color);
+        }
+
+        .container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Sidebar navigation */
+        .sidebar {
+            width: 280px;
+            background: var(--section-bg);
+            border-right: 1px solid var(--border-color);
+            padding: 1.5rem;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+        }
+
+        .sidebar h1 {
+            font-size: 1.5rem;
+            margin-bottom: 1.5rem;
+            color: var(--primary-color);
+            padding-bottom: 0.75rem;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .nav-item {
+            margin-bottom: 0.75rem;
+        }
+
+        .nav-link {
+            display: block;
+            padding: 0.5rem 0;
+            color: var(--text-color);
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.2s;
+            font-size: 0.95rem;
+        }
+
+        .nav-link:hover {
+            color: var(--primary-color);
+        }
+
+        .nav-sub-item {
+            margin-left: 1rem;
+            font-size: 0.9rem;
+        }
+
+        /* Main content area */
+        .content {
+            flex: 1;
+            margin-left: 280px;
+            padding: 2rem;
+            max-width: 1000px;
+        }
+
+        .section {
+            background: var(--section-bg);
+            border-radius: 0.5rem;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        }
+
+        h2 {
+            font-size: 1.75rem;
+            margin-bottom: 1.25rem;
+            color: var(--primary-color);
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        h3 {
+            font-size: 1.35rem;
+            margin: 1.5rem 0 0.75rem;
+            color: var(--secondary-color);
+        }
+
+        p {
+            margin-bottom: 1rem;
+        }
+
+        ul, ol {
+            margin-bottom: 1.5rem;
+            padding-left: 1.25rem;
+        }
+
+        li {
+            margin-bottom: 0.5rem;
+        }
+
+        /* Code blocks */
+        pre {
+            background-color: var(--code-bg);
+            border-radius: 0.5rem;
+            padding: 1rem;
+            overflow-x: auto;
+            margin: 1rem 0 1.5rem;
+        }
+
+        code {
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+        }
+
+        .inline-code {
+            background-color: rgba(99, 102, 241, 0.1);
+            color: var(--primary-color);
+            padding: 0.15rem 0.3rem;
+            border-radius: 0.25rem;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+        }
+
+        /* Feature boxes */
+        .features-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1.5rem;
+            margin: 1.5rem 0;
+        }
+
+        .feature-box {
+            background: linear-gradient(145deg, rgba(99, 102, 241, 0.05), rgba(168, 85, 247, 0.05));
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            padding: 1.25rem;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .feature-box:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+        }
+
+        .feature-box h4 {
+            font-size: 1.1rem;
+            margin-bottom: 0.75rem;
+            color: var(--primary-color);
+        }
+
+        /* Buttons and highlight elements */
+        .highlight-box {
+            background-color: rgba(99, 102, 241, 0.1);
+            border-left: 4px solid var(--primary-color);
+            padding: 1rem;
+            margin: 1.5rem 0;
+            border-radius: 0 0.5rem 0.5rem 0;
+        }
+
+        .highlight-box-title {
+            font-weight: bold;
+            color: var(--primary-color);
+            margin-bottom: 0.5rem;
+        }
+
+        .table-container {
+            overflow-x: auto;
+            margin: 1.5rem 0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        th {
+            background-color: rgba(99, 102, 241, 0.1);
+            font-weight: 600;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+            }
+
+            .sidebar {
+                width: 100%;
+                height: auto;
+                position: relative;
+                border-right: none;
+                border-bottom: 1px solid var(--border-color);
+                padding: 1rem;
+            }
+
+            .content {
+                margin-left: 0;
+                padding: 1rem;
+            }
+
+            .section {
+                padding: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Sidebar navigation -->
+        <aside class="sidebar">
+            <h1>LLM Agent Module</h1>
+            <nav>
+                <div class="nav-item">
+                    <a href="#overview" class="nav-link">Overview</a>
+                </div>
+                <div class="nav-item">
+                    <a href="#features" class="nav-link">Features</a>
+                </div>
+                <div class="nav-item">
+                    <a href="#installation" class="nav-link">Installation</a>
+                </div>
+                <div class="nav-item">
+                    <a href="#quick-start" class="nav-link">Quick Start</a>
+                </div>
+                <div class="nav-item">
+                    <a href="#environment" class="nav-link">Environment Setup</a>
+                </div>
+                <div class="nav-item">
+                    <a href="#agent-class" class="nav-link">Agent Class Usage</a>
+                    <div class="nav-sub-item">
+                        <a href="#creating-agent" class="nav-link">Creating an Agent</a>
+                    </div>
+                    <div class="nav-sub-item">
+                        <a href="#processing-text" class="nav-link">Processing Text</a>
+                    </div>
+                    <div class="nav-sub-item">
+                        <a href="#processing-images" class="nav-link">Processing Images</a>
+                    </div>
+                    <div class="nav-sub-item">
+                        <a href="#system-prompts" class="nav-link">System Prompts</a>
+                    </div>
+                    <div class="nav-sub-item">
+                        <a href="#conversation-history" class="nav-link">Conversation History</a>
+                    </div>
+                </div>
+                <div class="nav-item">
+                    <a href="#llm-implementations" class="nav-link">LLM Implementations</a>
+                </div>
+                <div class="nav-item">
+                    <a href="#advanced-usage" class="nav-link">Advanced Usage</a>
+                </div>
+                <div class="nav-item">
+                    <a href="#utility-functions" class="nav-link">Utility Functions</a>
+                </div>
+                <div class="nav-item">
+                    <a href="#examples" class="nav-link">Real-World Examples</a>
+                </div>
+            </nav>
+        </aside>
+
+        <!-- Main content area -->
+        <main class="content">
+            <section id="overview" class="section">
+                <h2>Overview</h2>
+                <p>A simple, reliable, and easy-to-use Python module for building and managing agents that interact with different Large Language Models (LLMs).</p>
+                <p>This module provides a unified Agent abstraction that encapsulates core LLM interaction logic, allowing developers to create agents powered by different LLMs through dependency injection.</p>
+            </section>
+
+            <section id="features" class="section">
+                <h2>Features</h2>
+                <div class="features-container">
+                    <div class="feature-box">
+                        <h4>Unified Agent Interface</h4>
+                        <p>Create agents that work with any supported LLM</p>
+                    </div>
+                    <div class="feature-box">
+                        <h4>Multiple LLM Support</h4>
+                        <p>OpenAI GPT models and Google Gemini models</p>
+                    </div>
+                    <div class="feature-box">
+                        <h4>Conversation History</h4>
+                        <p>Built-in support for maintaining conversation context</p>
+                    </div>
+                    <div class="feature-box">
+                        <h4>Async/Await Support</h4>
+                        <p>Modern asynchronous API for non-blocking operations</p>
+                    </div>
+                    <div class="feature-box">
+                        <h4>Simple Configuration</h4>
+                        <p>Easy API key management through environment variables</p>
+                    </div>
+                    <div class="feature-box">
+                        <h4>Error Handling</h4>
+                        <p>Clear and specific error messages</p>
+                    </div>
+                    <div class="feature-box">
+                        <h4>Vision Capabilities</h4>
+                        <p>Support for processing images with compatible models</p>
+                    </div>
+                    <div class="feature-box">
+                        <h4>System Prompts</h4>
+                        <p>Define agent personality and behavior with customizable prompts</p>
+                    </div>
+                </div>
+            </section>
+
+            <section id="installation" class="section">
+                <h2>Installation</h2>
+                <p>Clone the repository:</p>
+                <pre><code class="language-bash">git clone https://github.com/ZhuoQiuMcgill/LLM_AGENT.git
+cd LLM_AGENT</code></pre>
+
+                <p>Install dependencies:</p>
+                <pre><code class="language-bash">pip install -r requirements.txt</code></pre>
+            </section>
+
+            <section id="quick-start" class="section">
+                <h2>Quick Start</h2>
+                <pre><code class="language-python">import asyncio
+from agent_module import Agent, GPTModel, load_env_file
+
+# Load environment variables from .env file (API keys)
+load_env_file()
+
+# Create an LLM implementation (OpenAI GPT-4)
+llm = GPTModel(model="gpt-4")
+
+# Create an agent with the LLM implementation
+agent = Agent(
+    llm_interface=llm,
+    name="GPT Assistant",
+    system_prompt="You are a helpful assistant."
+)
+
+# Use the agent
+async def chat():
+    response = await agent.process("Hello! Can you help me with a question?")
+    print(f'Agent: {response}')
+
+    # Continue the conversation
+    response = await agent.process("What's the capital of France?")
+    print(f'Agent: {response}')
+
+# Run the async function
+asyncio.run(chat())</code></pre>
+            </section>
+
+            <section id="environment" class="section">
+                <h2>Environment Setup</h2>
+                <p>Create a <span class="inline-code">.env</span> file in your project root with your API keys:</p>
+                <pre><code># OpenAI API Key
+OPENAI_API_KEY=your_openai_api_key_here
+OPENAI_ORGANIZATION=your_organization_id_here  # Optional
+
+# Google API Key (for Gemini models)
+GOOGLE_API_KEY=your_google_api_key_here</code></pre>
+            </section>
+
+            <section id="agent-class" class="section">
+                <h2>Agent Class: Detailed Usage</h2>
+                <p>The <span class="inline-code">Agent</span> class is the central component of this module. It wraps different LLM implementations with a unified interface and manages conversation history.</p>
+
+                <h3 id="creating-agent">Creating an Agent</h3>
+                <pre><code class="language-python">from agent_module import Agent, GPTModel, InMemoryHistoryManager
+
+# Create a custom history manager (optional)
+history_manager = InMemoryHistoryManager(max_messages=50)
+
+# Create an agent with the GPT model
+agent = Agent(
+    llm_interface=GPTModel(model="gpt-4o"),
+    history_manager=history_manager,  # Optional
+    name="GPT Assistant",             # Optional
+    system_prompt="You are a helpful assistant specialized in explaining complex topics in simple terms.",
+    image_system_prompt="You are a visual assistant that can analyze images and provide detailed explanations.",
+    vision_model_override="gpt-4o",   # Override model for image processing
+    max_image_size=(1024, 1024),     # Resize images before processing
+)</code></pre>
+
+                <h3 id="processing-text">Processing Regular Text Inputs</h3>
+                <pre><code class="language-python"># Process a single text message
+response = await agent.process("Can you explain quantum computing in simple terms?")
+
+# Alternative method name (alias for process)
+response = await agent.run("What is the difference between AI, ML, and deep learning?")
+
+# Add configuration overrides for a specific request
+response = await agent.process(
+    "Write a creative story about space exploration.",
+    config={
+        "temperature": 0.9,           # Increase creativity
+        "max_output_tokens": 2000,    # Request longer response
+    }
+)</code></pre>
+
+                <h3 id="processing-images">Processing Images with Text</h3>
+                <pre><code class="language-python"># Process text with an image file
+response = await agent.process_with_image(
+    "What can you tell me about this image?",
+    image_path="path/to/your/image.jpg"
+)
+
+# Process with custom config
+response = await agent.process_with_image(
+    "Explain what's happening in this diagram.",
+    image_path="path/to/diagram.png",
+    config={
+        "temperature": 0.2,           # More precise responses
+        "max_output_tokens": 1000,    # Control response length
+    }
+)
+
+# Process with binary image data (e.g., from web uploads)
+with open("path/to/image.jpg", "rb") as img_file:
+    image_data = img_file.read()
+
+response = await agent.process_with_image_bin(
+    "Describe the objects in this image.",
+    image_data=image_data,
+    mime_type="image/jpeg"  # Optional, will try to detect if not provided
+)</code></pre>
+
+                <h3 id="system-prompts">System Prompts and Image Processing</h3>
+                <div class="highlight-box">
+                    <div class="highlight-box-title">System Prompts</div>
+                    <p>The system prompt is used to define the agent's behavior and capabilities. When processing both text and images, the system prompt applies to the combined input.</p>
+                </div>
+
+                <pre><code class="language-python"># Create an agent with a system prompt that works for text and images
+agent = Agent(
+    llm_interface=GPTModel(model="gpt-4o"),
+    system_prompt="You are a helpful assistant. When analyzing images, be detailed and focus on key elements."
+)
+
+# The system prompt will apply to this text+image request as a single unit
+response = await agent.process_with_image(
+    "What's in this image and what's significant about it?",
+    image_path="path/to/image.jpg"
+)</code></pre>
+
+                <p>For specialized image processing needs, you can provide a separate image system prompt:</p>
+
+                <pre><code class="language-python">agent = Agent(
+    llm_interface=GPTModel(model="gpt-4o"),
+    system_prompt="You are a helpful assistant for general questions.",
+    image_system_prompt="You are a visual analysis expert. When examining images, describe all visual elements in detail."
+)</code></pre>
+
+                <h3 id="conversation-history">Managing Conversation History</h3>
+                <pre><code class="language-python"># Reset conversation history
+agent.reset_history()
+
+# Create an agent that limits history
+from agent_module import InMemoryHistoryManager
+
+history = InMemoryHistoryManager(max_messages=10)
+agent = Agent(llm_interface=llm, history_manager=history)
+
+# History is maintained automatically across multiple calls
+response1 = await agent.process("Hello, I'm researching renewable energy.")
+response2 = await agent.process("What are the most promising technologies?")
+# The agent will remember the context from the first message</code></pre>
+
+                <p>Testing connection:</p>
+                <pre><code class="language-python">async def test_connection():
+    try:
+        result = await agent.connection_test()
+        print(f"Connection test result: {result}")
+    except Exception as e:
+        print(f"Connection test failed: {str(e)}")
+
+asyncio.run(test_connection())</code></pre>
+            </section>
+
+            <section id="llm-implementations" class="section">
+                <h2>LLM Implementations</h2>
+
+                <h3>OpenAI GPT Models</h3>
+                <pre><code class="language-python">from agent_module import GPTModel
+
+# Create a GPT model implementation
+gpt = GPTModel(
+    model="gpt-4o",                  # Optional: The GPT model to use
+    api_key=None,                    # Optional: OpenAI API key (if None, loads from env)
+    organization=None,               # Optional: OpenAI organization ID
+    max_output_tokens=8192,          # Optional: Maximum number of tokens to generate
+    temperature=1.0,                 # Optional: Controls randomness (0.0 to 2.0)
+    default_system_prompt=None,      # Optional: Default system prompt
+)</code></pre>
+
+                <h3>Google Gemini Models</h3>
+                <pre><code class="language-python">from agent_module import GeminiModel
+
+# Create a Gemini model implementation
+gemini = GeminiModel(
+    model="gemini-pro",             # Optional: The Gemini model to use
+    api_key=None,                   # Optional: Google AI API key (if None, loads from env)
+    temperature=0.7,                # Optional: Controls randomness (0.0 to 1.0)
+    max_output_tokens=65536,        # Optional: Maximum number of tokens to generate
+    top_p=0.95,                     # Optional: Nucleus sampling parameter
+    top_k=40,                       # Optional: Top-k sampling parameter
+    default_system_prompt=None,     # Optional: Default system prompt
+)</code></pre>
+            </section>
+
+            <section id="advanced-usage" class="section">
+                <h2>Advanced Usage</h2>
+
+                <h3>Using Different Models for Text and Images</h3>
+                <pre><code class="language-python">from agent_module import Agent, GPTModel
+
+# Create an agent that uses different models for different tasks
+agent = Agent(
+    llm_interface=GPTModel(model="gpt-3.5-turbo"),  # Lower cost for text-only
+    vision_model_override="gpt-4o",                # Higher capability for vision
+)
+
+# Text-only uses the base model (gpt-3.5-turbo)
+await agent.process("What's the capital of France?")
+
+# Image processing uses the override model (gpt-4o)
+await agent.process_with_image("What's in this image?", "image.jpg")</code></pre>
+
+                <h3>Handling Images from Web Applications</h3>
+                <pre><code class="language-python">async def handle_upload(file_data, prompt):
+    # file_data is the binary data from the upload
+    response = await agent.process_with_image_bin(
+        prompt,
+        image_data=file_data,
+        mime_type="image/jpeg"  # Set based on upload info
+    )
+    return response</code></pre>
+
+                <h3>Error Handling</h3>
+                <pre><code class="language-python">from agent_module import AgentError, LLMAPIError, ConfigurationError, HistoryError
+
+try:
+    response = await agent.process("Hello")
+except LLMAPIError as e:
+    print(f"API Error: {str(e)}")
+except ConfigurationError as e:
+    print(f"Configuration Error: {str(e)}")
+except AgentError as e:
+    print(f"General Agent Error: {str(e)}")</code></pre>
+            </section>
+
+            <section id="utility-functions" class="section">
+                <h2>Utility Functions</h2>
+
+                <h3>Configuration Loading</h3>
+                <pre><code class="language-python">from agent_module import load_config, create_llm_config
+
+# Load configuration from environment variables or .env file
+config = load_config(
+    env_file=None,           # Optional: Path to .env file
+    include_api_keys=True    # Optional: Whether to include API keys in config
+)
+
+# Create a model-specific configuration
+openai_config = create_llm_config(
+    config,                  # Required: The main configuration dictionary
+    "openai"                 # Required: LLM type ("openai" or "google")
+)</code></pre>
+
+                <h3>Environment File Loading</h3>
+                <pre><code class="language-python">from agent_module import load_env_file
+
+# Load environment variables from .env file
+load_env_file(
+    env_file=None            # Optional: Path to .env file (default: ".env")
+)</code></pre>
+
+                <h3>API Key Retrieval</h3>
+                <pre><code class="language-python">from agent_module import get_api_key
+
+# Get API key from environment variables
+api_key = get_api_key(
+    env_var_name,            # Required: Name of the environment variable
+    env_file=None            # Optional: Path to .env file
+)</code></pre>
+
+                <h3>Logging Setup</h3>
+                <pre><code class="language-python">from agent_module import setup_logging
+import logging
+
+# Set up logging
+setup_logging(
+    level=logging.INFO,      # Optional: Logging level
+    format_string=None,      # Optional: Log format string
+    log_file=None            # Optional: Path to log file
+)</code></pre>
+            </section>
+
+            <section id="examples" class="section">
+                <h2>Real-World Examples</h2>
+
+                <h3>Chat Application Example</h3>
+                <pre><code class="language-python">import asyncio
+from agent_module import Agent, GPTModel, load_env_file
+
+# Load API keys
+load_env_file()
+
+# Set up the agent
+agent = Agent(
+    llm_interface=GPTModel(model="gpt-4"),
+    system_prompt="You are a friendly and helpful assistant named Alex."
+)
+
+# Simple chat loop
+async def chat_loop():
+    print("Chat started. Type 'exit' to end the conversation.")
+    print("Assistant: Hi! I'm Alex. How can I help you today?")
+
+    while True:
+        user_input = input("You: ")
+        if user_input.lower() in ['exit', 'quit', 'bye']:
+            print("Assistant: Goodbye! Have a great day!")
+            break
+
+        response = await agent.process(user_input)
+        print(f"Assistant: {response}")
+
+# Run the chat loop
+asyncio.run(chat_loop())</code></pre>
+
+                <h3>Image Analysis Application</h3>
+                <pre><code class="language-python">import asyncio
+import os
+from agent_module import Agent, GPTModel, load_env_file
+
+# Load API keys
+load_env_file()
+
+# Set up the agent with vision capabilities
+agent = Agent(
+    llm_interface=GPTModel(model="gpt-4o"),
+    system_prompt="You are a visual analysis assistant that specializes in describing images in detail."
+)
+
+# Function to analyze images in a directory
+async def analyze_images(directory, query="Describe this image in detail."):
+    results = {}
+
+    for filename in os.listdir(directory):
+        if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
+            file_path = os.path.join(directory, filename)
+            print(f"Analyzing {filename}...")
+
+            try:
+                response = await agent.process_with_image(query, file_path)
+                results[filename] = response
+                print(f"✓ Completed analysis of {filename}")
+            except Exception as e:
+                print(f"✗ Error analyzing {filename}: {str(e)}")
+                results[filename] = f"Error: {str(e)}"
+
+    return results
+
+# Run the analysis
+async def main():
+    results = await analyze_images("./images", "What objects do you see in this image?")
+
+    # Print or save results
+    for filename, analysis in results.items():
+        print(f"\n--- {filename} ---\n{analysis}\n")
+
+asyncio.run(main())</code></pre>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        // Initialize syntax highlighting
+        document.addEventListener('DOMContentLoaded', () => {
+            hljs.highlightAll();
+        });
+
+        // Smooth scrolling for navigation links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+
+                const targetId = this.getAttribute('href');
+                const targetElement = document.querySelector(targetId);
+
+                if (targetElement) {
+                    window.scrollTo({
+                        top: targetElement.offsetTop - 20,
+                        behavior: 'smooth'
+                    });
+                }
+            });
+        });
+    </script>
+</body>
+</html>

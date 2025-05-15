@@ -39,7 +39,17 @@ class GeminiModel(LLMInterface):
     Note:
         This implementation requires the 'google-generativeai' package.
         Install it using: pip install google-generativeai
+
+        For image processing capabilities, the 'Pillow' package is recommended.
+        Install it using: pip install Pillow
     """
+
+    # List of vision-capable models to try (in order of preference)
+    VISION_CAPABLE_MODELS = [
+        "gemini-1.5-flash",  # Newer recommended model for vision
+        "gemini-1.5-pro",    # Higher capability model with vision support
+        "gemini-1.0-pro-vision-latest" # Fallback if available
+    ]
 
     def __init__(
             self,
@@ -88,6 +98,14 @@ class GeminiModel(LLMInterface):
 
         # Initialize the API
         genai.configure(api_key=self.api_key)
+
+        # Check for PIL/Pillow availability
+        self._has_pil = importlib.util.find_spec("PIL") is not None
+        if not self._has_pil:
+            logger.warning(
+                "Pillow (PIL) package not found. Image processing fallbacks may be limited. "
+                "Install it using: pip install Pillow"
+            )
 
         logger.debug(f"Initialized GeminiModel with model: {model}")
 
@@ -188,11 +206,33 @@ class GeminiModel(LLMInterface):
             # Get request configuration
             request_config = self._prepare_request_config(config)
 
-            # For image processing, use vision-capable model
+            # For image processing, use an appropriate vision-capable model
             current_model = request_config.get("model", self.model)
-            if "vision" not in current_model:
-                current_model = "gemini-pro-vision"
-                logger.info(f"Switched to vision-capable model: {current_model}")
+
+            # If the specified model doesn't have "vision" capabilities (this is a simple heuristic),
+            # try to select a suitable vision model from the list of known vision-capable models
+            if "vision" not in current_model.lower() and not any(model_name in current_model.lower() for model_name in ["1.5", "1.0-pro"]):
+                # Use the model specified in vision_model_override, or try the available vision models
+                vision_model = request_config.get("vision_model_override", None)
+
+                if not vision_model:
+                    # Try each model in our list of vision-capable models
+                    for model_name in self.VISION_CAPABLE_MODELS:
+                        try:
+                            # Test model availability (could add validation here)
+                            vision_model = model_name
+                            break
+                        except Exception:
+                            continue
+
+                # If we found a vision model, use it
+                if vision_model:
+                    current_model = vision_model
+                    logger.info(f"Switched to vision-capable model: {current_model}")
+                else:
+                    # If all else fails, default to first in our list
+                    current_model = self.VISION_CAPABLE_MODELS[0]
+                    logger.info(f"Defaulting to vision model: {current_model}")
 
             # Check if image file exists
             if not os.path.exists(image_path):
@@ -226,7 +266,7 @@ class GeminiModel(LLMInterface):
 
             logger.debug(f"Sending request to Google AI API with text and image")
 
-            # Try to load and process image using the appropriate API method
+            # Try different methods to process the image
             try:
                 # Method 1: Using built-in image loading
                 if hasattr(genai.types, "Image") and hasattr(genai.types.Image, "from_file"):
@@ -246,14 +286,23 @@ class GeminiModel(LLMInterface):
                         {"inline_data": {"mime_type": mime_type, "data": image_data}}
                     ])
             except Exception as e:
+                logger.error(f"Failed to process image with Gemini API: {e}")
+
                 # Fallback: Try using PIL if available
-                try:
-                    from PIL import Image
-                    image = Image.open(image_path)
-                    response = await model.generate_content_async([prompt_text, image])
-                except ImportError:
-                    logger.error("Failed to process image with Gemini API and PIL is not available")
-                    raise LLMAPIError(f"Failed to process image with Gemini API: {e}")
+                if self._has_pil:
+                    try:
+                        from PIL import Image
+                        image = Image.open(image_path)
+                        response = await model.generate_content_async([prompt_text, image])
+                    except Exception as pil_error:
+                        logger.error(f"PIL fallback also failed: {pil_error}")
+                        raise LLMAPIError(f"Failed to process image with Gemini API: {e}. PIL fallback also failed: {pil_error}")
+                else:
+                    # If PIL is not available, suggest installing it
+                    raise LLMAPIError(
+                        f"Failed to process image with Gemini API: {e}. "
+                        "Consider installing Pillow for better image processing: pip install Pillow"
+                    )
 
             # Extract response text
             try:
@@ -318,11 +367,33 @@ class GeminiModel(LLMInterface):
             # Get request configuration
             request_config = self._prepare_request_config(config)
 
-            # For image processing, use vision-capable model
+            # For image processing, use an appropriate vision-capable model
             current_model = request_config.get("model", self.model)
-            if "vision" not in current_model:
-                current_model = "gemini-pro-vision"
-                logger.info(f"Switched to vision-capable model: {current_model}")
+
+            # If the specified model doesn't have "vision" capabilities (this is a simple heuristic),
+            # try to select a suitable vision model from the list of known vision-capable models
+            if "vision" not in current_model.lower() and not any(model_name in current_model.lower() for model_name in ["1.5", "1.0-pro"]):
+                # Use the model specified in vision_model_override, or try the available vision models
+                vision_model = request_config.get("vision_model_override", None)
+
+                if not vision_model:
+                    # Try each model in our list of vision-capable models
+                    for model_name in self.VISION_CAPABLE_MODELS:
+                        try:
+                            # Test model availability (could add validation here)
+                            vision_model = model_name
+                            break
+                        except Exception:
+                            continue
+
+                # If we found a vision model, use it
+                if vision_model:
+                    current_model = vision_model
+                    logger.info(f"Switched to vision-capable model: {current_model}")
+                else:
+                    # If all else fails, default to first in our list
+                    current_model = self.VISION_CAPABLE_MODELS[0]
+                    logger.info(f"Defaulting to vision model: {current_model}")
 
             # Use default MIME type if not provided
             if not mime_type:
@@ -382,15 +453,24 @@ class GeminiModel(LLMInterface):
                         {"inline_data": {"mime_type": mime_type, "data": image_data}}
                     ])
             except Exception as e:
+                logger.error(f"Failed to process binary image with Gemini API: {e}")
+
                 # Fallback: Try using PIL if available
-                try:
-                    from PIL import Image
-                    import io
-                    image = Image.open(io.BytesIO(image_data))
-                    response = await model.generate_content_async([prompt_text, image])
-                except ImportError:
-                    logger.error("Failed to process binary image with Gemini API and PIL is not available")
-                    raise LLMAPIError(f"Failed to process binary image with Gemini API: {e}")
+                if self._has_pil:
+                    try:
+                        from PIL import Image
+                        import io
+                        image = Image.open(io.BytesIO(image_data))
+                        response = await model.generate_content_async([prompt_text, image])
+                    except Exception as pil_error:
+                        logger.error(f"PIL fallback also failed: {pil_error}")
+                        raise LLMAPIError(f"Failed to process binary image with Gemini API: {e}. PIL fallback also failed: {pil_error}")
+                else:
+                    # If PIL is not available, suggest installing it
+                    raise LLMAPIError(
+                        f"Failed to process binary image with Gemini API: {e}. "
+                        "Consider installing Pillow for better image processing: pip install Pillow"
+                    )
 
             # Extract response text
             try:
