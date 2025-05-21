@@ -6,6 +6,48 @@ Language Models (LLMs).
 This module provides a unified Agent abstraction that encapsulates core LLM interaction logic, allowing developers to
 create agents powered by different LLMs through dependency injection.
 
+## Supported Model List
+
+### Verified Models
+The following models have been tested and verified to work with this module:
+
+```
+o4-mini-2025-04-16
+o3-mini-2025-01-31
+gpt-4.1-2025-04-14
+gpt-4o-2024-08-06
+gemini-2.5-pro-preview-05-06
+```
+
+### Unverified Models
+These models may work but haven't been fully tested:
+
+#### OpenAI Models
+- gpt-4-turbo
+- gpt-4-vision-preview
+- gpt-4-1106-preview
+- gpt-4-0613
+- gpt-3.5-turbo
+- gpt-3.5-turbo-instruct
+- gpt-3.5-turbo-0125
+- gpt-3.5-turbo-1106
+
+#### Google Models
+- gemini-1.5-pro
+- gemini-1.5-flash
+- gemini-1.0-pro
+- gemini-1.0-pro-vision
+- gemini-1.0-pro-vision-latest
+
+#### Anthropic Models
+- claude-3-opus-20240229
+- claude-3-sonnet-20240229
+- claude-3-haiku-20240307
+- claude-2.1
+- claude-2.0
+
+Note: When using models not explicitly listed under "Verified Models", you may need to adjust parameters like `max_output_tokens` and ensure the appropriate vision-capable model is selected for image processing.
+
 ## Features
 
 - **Unified Agent Interface**: Create agents that work with any supported LLM
@@ -145,15 +187,92 @@ response = await agent.process_with_image(
         "max_output_tokens": 1000,  # Control response length
     }
 )
+```
 
-# Process with binary image data (e.g., from web uploads)
+### Processing Images from Binary Data
+
+For working with binary image data directly (such as from web uploads or memory):
+
+```python
+# Process with binary image data from file
 with open("path/to/image.jpg", "rb") as img_file:
     image_data = img_file.read()
 
 response = await agent.process_with_image_bin(
     "Describe the objects in this image.",
     image_data=image_data,
-    mime_type="image/jpeg"  # Optional, will try to detect if not provided
+    mime_type="image/jpeg"  # Specify MIME type
+)
+
+# Process image data from web upload (e.g., in a FastAPI application)
+@app.post("/analyze-image")
+async def analyze_image(file: UploadFile, prompt: str):
+    contents = await file.read()
+    mime_type = file.content_type  # Get MIME type from upload
+    
+    response = await agent.process_with_image_bin(
+        prompt,
+        image_data=contents,
+        mime_type=mime_type
+    )
+    return {"analysis": response}
+```
+
+### Supported MIME Types for Binary Images
+
+When using `process_with_image_bin`, the following MIME types are supported:
+
+- `image/jpeg` - JPEG images (default if no MIME type is specified)
+- `image/png` - PNG images
+- `image/gif` - GIF images (note: only the first frame will be processed)
+- `image/webp` - WebP images
+- `image/bmp` - BMP images
+- `image/tiff` - TIFF images
+- `image/svg+xml` - SVG images (support varies by model)
+
+Example with different MIME types:
+
+```python
+# Process a PNG image
+with open("chart.png", "rb") as img_file:
+    png_data = img_file.read()
+
+response = await agent.process_with_image_bin(
+    "Analyze this chart and provide key insights.",
+    image_data=png_data,
+    mime_type="image/png"
+)
+
+# Process a WebP image
+with open("photo.webp", "rb") as img_file:
+    webp_data = img_file.read()
+
+response = await agent.process_with_image_bin(
+    "What's shown in this photo?",
+    image_data=webp_data,
+    mime_type="image/webp"
+)
+```
+
+### Automatic MIME Type Detection
+
+When using Google's Gemini model and no MIME type is provided, the module will attempt to detect the MIME type automatically if the `python-magic` library is installed:
+
+```python
+# Install python-magic for MIME type detection
+# pip install python-magic
+
+# For Windows, additional setup may be required:
+# pip install python-magic-bin
+
+# The module will auto-detect MIME type if not provided
+with open("unknown_image_type.img", "rb") as img_file:
+    image_data = img_file.read()
+
+response = await agent.process_with_image_bin(
+    "What is in this image?",
+    image_data=image_data,
+    # mime_type not provided - will attempt to detect
 )
 ```
 
@@ -331,14 +450,120 @@ await agent.process_with_image("What's in this image?", "image.jpg")
 For web applications receiving file uploads:
 
 ```python
-async def handle_upload(file_data, prompt):
-    # file_data is the binary data from the upload
+# FastAPI example
+from fastapi import FastAPI, UploadFile, File, Form
+from io import BytesIO
+from agent_module import Agent, GPTModel, load_env_file
+
+app = FastAPI()
+load_env_file()
+
+# Create agent
+agent = Agent(
+    llm_interface=GPTModel(model="gpt-4o"),
+    system_prompt="You are a helpful image analysis assistant."
+)
+
+@app.post("/analyze")
+async def analyze_image(
+    file: UploadFile = File(...),
+    prompt: str = Form(...)
+):
+    # Read file contents
+    contents = await file.read()
+    
+    # Get content type from upload
+    mime_type = file.content_type
+    
+    # Process with agent
     response = await agent.process_with_image_bin(
         prompt,
-        image_data=file_data,
-        mime_type="image/jpeg"  # Set based on upload info
+        image_data=contents,
+        mime_type=mime_type
     )
-    return response
+    
+    return {"analysis": response}
+```
+
+### Flask Example:
+
+```python
+from flask import Flask, request, jsonify
+import asyncio
+from agent_module import Agent, GPTModel, load_env_file
+
+app = Flask(__name__)
+load_env_file()
+
+# Create agent
+agent = Agent(
+    llm_interface=GPTModel(model="gpt-4o"),
+    system_prompt="You are a helpful image analysis assistant."
+)
+
+@app.route("/analyze", methods=["POST"])
+def analyze_image():
+    if 'file' not in request.files:
+        return jsonify({"error": "No file part"}), 400
+    
+    file = request.files['file']
+    prompt = request.form.get('prompt', 'What is in this image?')
+    
+    # Read binary data
+    image_data = file.read()
+    mime_type = file.content_type
+    
+    # Run async function in sync context
+    response = asyncio.run(agent.process_with_image_bin(
+        prompt,
+        image_data=image_data,
+        mime_type=mime_type
+    ))
+    
+    return jsonify({"analysis": response})
+```
+
+### Processing Base64-Encoded Images
+
+For working with base64-encoded images, common in web applications:
+
+```python
+import base64
+import asyncio
+from agent_module import Agent, GPTModel, load_env_file
+
+load_env_file()
+agent = Agent(llm_interface=GPTModel(model="gpt-4o"))
+
+async def analyze_base64_image(base64_string, prompt):
+    # Remove data URL prefix if present
+    if "," in base64_string:
+        # Format: data:image/jpeg;base64,/9j/4AAQSkZJRg...
+        mime_type_part, base64_part = base64_string.split(",", 1)
+        mime_type = mime_type_part.split(":")[1].split(";")[0]
+        base64_string = base64_part
+    else:
+        # Assume JPEG if not specified
+        mime_type = "image/jpeg"
+    
+    # Decode base64 to binary
+    image_data = base64.b64decode(base64_string)
+    
+    # Process with agent
+    return await agent.process_with_image_bin(
+        prompt,
+        image_data=image_data,
+        mime_type=mime_type
+    )
+
+# Example usage
+async def main():
+    # Example base64 string (shortened)
+    base64_image = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAUDBA..."
+    result = await analyze_base64_image(base64_image, "What's in this image?")
+    print(result)
+
+asyncio.run(main())
 ```
 
 ### Error Handling
@@ -497,6 +722,65 @@ async def main():
     for filename, analysis in results.items():
         print(f"\n--- {filename} ---\n{analysis}\n")
 
+
+asyncio.run(main())
+```
+
+### Intelligent Document Processing Example
+
+```python
+import asyncio
+import os
+from PIL import Image
+import pytesseract
+from agent_module import Agent, GPTModel, load_env_file
+
+# Load environment variables
+load_env_file()
+
+# Set up the agent
+agent = Agent(
+    llm_interface=GPTModel(model="gpt-4o"),
+    system_prompt="You are a document analysis assistant specialized in extracting and analyzing information from documents."
+)
+
+async def process_document(image_path):
+    # First, extract text with OCR
+    try:
+        img = Image.open(image_path)
+        extracted_text = pytesseract.image_to_string(img)
+    except Exception as e:
+        print(f"OCR failed: {e}")
+        extracted_text = "OCR extraction failed"
+    
+    # Send both the image and extracted text to the LLM
+    prompt = f"""
+    I'm sending you a document image with OCR-extracted text.
+    
+    OCR-extracted text:
+    {extracted_text}
+    
+    Please:
+    1. Analyze the document type
+    2. Extract key information (dates, names, amounts, etc.)
+    3. Summarize the main content
+    4. Note any discrepancies between the image and OCR text
+    """
+    
+    # Process with both text context and image
+    response = await agent.process_with_image(prompt, image_path)
+    return {
+        "ocr_text": extracted_text,
+        "analysis": response
+    }
+
+# Usage
+async def main():
+    result = await process_document("invoice.jpg")
+    print("\n=== OCR EXTRACTED TEXT ===\n")
+    print(result["ocr_text"])
+    print("\n=== DOCUMENT ANALYSIS ===\n")
+    print(result["analysis"])
 
 asyncio.run(main())
 ```

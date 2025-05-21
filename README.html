@@ -4,21 +4,25 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LLM Agent Module</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/atom-one-dark.min.css">
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/atom-one-dark.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/languages/python.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/languages/bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/languages/ini.min.js"></script>
     <style>
+        /* CSS Variables for theming */
         :root {
-            --primary-color: #6366f1;
-            --secondary-color: #a855f7;
-            --bg-color: #f9fafb;
-            --text-color: #111827;
-            --code-bg: #1f2937;
+            --primary-color: #6366f1; /* Indigo */
+            --secondary-color: #a855f7; /* Purple */
+            --bg-color: #f9fafb; /* Cool Gray 50 */
+            --text-color: #111827; /* Cool Gray 900 */
+            --code-bg: #1f2937; /* Cool Gray 800 */
             --section-bg: white;
-            --border-color: #e5e7eb;
+            --border-color: #e5e7eb; /* Cool Gray 200 */
         }
 
+        /* Basic Reset */
         * {
             margin: 0;
             padding: 0;
@@ -35,6 +39,7 @@
         .container {
             display: flex;
             min-height: 100vh;
+            padding-left: 280px; /* MODIFIED: Account for fixed sidebar width */
         }
 
         /* Sidebar navigation */
@@ -43,9 +48,11 @@
             background: var(--section-bg);
             border-right: 1px solid var(--border-color);
             padding: 1.5rem;
-            position: fixed;
+            position: fixed; /* Fixed sidebar */
+            left: 0; /* Ensure sidebar is fixed to the left */
+            top: 0; /* Ensure sidebar is fixed to the top */
             height: 100vh;
-            overflow-y: auto;
+            overflow-y: auto; /* Scrollable if content exceeds height */
         }
 
         .sidebar h1 {
@@ -62,29 +69,37 @@
 
         .nav-link {
             display: block;
-            padding: 0.5rem 0;
+            padding: 0.5rem 0; /* Adjusted padding for better click area */
             color: var(--text-color);
             text-decoration: none;
             font-weight: 500;
-            transition: color 0.2s;
+            transition: color 0.2s, background-color 0.2s; /* Added background-color transition */
             font-size: 0.95rem;
+            border-radius: 0.25rem;
         }
 
         .nav-link:hover {
             color: var(--primary-color);
+            background-color: rgba(99, 102, 241, 0.05);
         }
 
         .nav-sub-item {
             margin-left: 1rem;
-            font-size: 0.9rem;
         }
+
+        .nav-sub-item .nav-link {
+            font-size: 0.9rem;
+            padding-left: 0.5rem;
+        }
+
 
         /* Main content area */
         .content {
-            flex: 1;
-            margin-left: 280px;
+            flex: 1; /* Takes remaining space in the flex container (after container's padding) */
             padding: 2rem;
-            max-width: 1000px;
+            max-width: 1000px; /* Max width for readability */
+            margin-left: auto; /* MODIFIED: For centering content block */
+            margin-right: auto; /* MODIFIED: For centering content block */
         }
 
         .section {
@@ -109,6 +124,13 @@
             color: var(--secondary-color);
         }
 
+        h4 {
+            font-size: 1.1rem;
+            margin-bottom: 0.75rem;
+            color: var(--primary-color);
+        }
+
+
         p {
             margin-bottom: 1rem;
         }
@@ -129,11 +151,13 @@
             padding: 1rem;
             overflow-x: auto;
             margin: 1rem 0 1.5rem;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
 
         code {
-            font-family: 'Consolas', 'Monaco', monospace;
+            font-family: 'Consolas', 'Monaco', 'SFMono-Regular', Menlo, Courier, monospace;
             font-size: 0.9rem;
+            line-height: 1.4;
         }
 
         .inline-code {
@@ -141,11 +165,11 @@
             color: var(--primary-color);
             padding: 0.15rem 0.3rem;
             border-radius: 0.25rem;
-            font-family: 'Consolas', 'Monaco', monospace;
-            font-size: 0.9rem;
+            font-family: 'Consolas', 'Monaco', 'SFMono-Regular', Menlo, Courier, monospace;
+            font-size: 0.9em;
         }
 
-        /* Feature boxes */
+        /* Feature boxes styling */
         .features-container {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -172,9 +196,9 @@
             color: var(--primary-color);
         }
 
-        /* Buttons and highlight elements */
+        /* Highlight boxes (e.g., for notes) */
         .highlight-box {
-            background-color: rgba(99, 102, 241, 0.1);
+            background-color: rgba(99, 102, 241, 0.07);
             border-left: 4px solid var(--primary-color);
             padding: 1rem;
             margin: 1.5rem 0;
@@ -187,6 +211,7 @@
             margin-bottom: 0.5rem;
         }
 
+        /* Table styling */
         .table-container {
             overflow-x: auto;
             margin: 1.5rem 0;
@@ -208,10 +233,11 @@
             font-weight: 600;
         }
 
-        /* Responsive adjustments */
+        /* Responsive adjustments for smaller screens */
         @media (max-width: 768px) {
             .container {
                 flex-direction: column;
+                padding-left: 0; /* MODIFIED: Reset container padding */
             }
 
             .sidebar {
@@ -221,132 +247,155 @@
                 border-right: none;
                 border-bottom: 1px solid var(--border-color);
                 padding: 1rem;
+                /* left and top are not needed for position: relative here */
             }
 
             .content {
                 margin-left: 0;
-                padding: 1rem;
+                padding: 1rem; /* Mobile specific padding */
+                margin-right: 0;
+                /* max-width: 1000px still applies, content won't overflow unless screen is very wide */
             }
 
             .section {
                 padding: 1.5rem;
             }
+
+            .features-container {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <!-- Sidebar navigation -->
-        <aside class="sidebar">
-            <h1>LLM Agent Module</h1>
-            <nav>
-                <div class="nav-item">
-                    <a href="#overview" class="nav-link">Overview</a>
+<div class="container">
+    <aside class="sidebar">
+        <h1>LLM Agent Module</h1>
+        <nav>
+            <div class="nav-item"><a href="#overview" class="nav-link">Overview</a></div>
+            <div class="nav-item"><a href="#supported-models" class="nav-link">Supported Models</a></div>
+            <div class="nav-item"><a href="#features" class="nav-link">Features</a></div>
+            <div class="nav-item"><a href="#installation" class="nav-link">Installation</a></div>
+            <div class="nav-item"><a href="#quick-start" class="nav-link">Quick Start</a></div>
+            <div class="nav-item"><a href="#environment" class="nav-link">Environment Setup</a></div>
+            <div class="nav-item">
+                <a href="#agent-class" class="nav-link">Agent Class Usage</a>
+                <div class="nav-sub-item"><a href="#creating-agent" class="nav-link">Creating an Agent</a></div>
+                <div class="nav-sub-item"><a href="#processing-text" class="nav-link">Processing Text</a></div>
+                <div class="nav-sub-item"><a href="#processing-images" class="nav-link">Processing Images</a></div>
+                <div class="nav-sub-item"><a href="#binary-images" class="nav-link">Binary Images</a></div>
+                <div class="nav-sub-item"><a href="#mime-types" class="nav-link">MIME Types</a></div>
+                <div class="nav-sub-item"><a href="#system-prompts" class="nav-link">System Prompts</a></div>
+                <div class="nav-sub-item"><a href="#conversation-history" class="nav-link">Conversation History</a>
                 </div>
-                <div class="nav-item">
-                    <a href="#features" class="nav-link">Features</a>
-                </div>
-                <div class="nav-item">
-                    <a href="#installation" class="nav-link">Installation</a>
-                </div>
-                <div class="nav-item">
-                    <a href="#quick-start" class="nav-link">Quick Start</a>
-                </div>
-                <div class="nav-item">
-                    <a href="#environment" class="nav-link">Environment Setup</a>
-                </div>
-                <div class="nav-item">
-                    <a href="#agent-class" class="nav-link">Agent Class Usage</a>
-                    <div class="nav-sub-item">
-                        <a href="#creating-agent" class="nav-link">Creating an Agent</a>
-                    </div>
-                    <div class="nav-sub-item">
-                        <a href="#processing-text" class="nav-link">Processing Text</a>
-                    </div>
-                    <div class="nav-sub-item">
-                        <a href="#processing-images" class="nav-link">Processing Images</a>
-                    </div>
-                    <div class="nav-sub-item">
-                        <a href="#system-prompts" class="nav-link">System Prompts</a>
-                    </div>
-                    <div class="nav-sub-item">
-                        <a href="#conversation-history" class="nav-link">Conversation History</a>
-                    </div>
-                </div>
-                <div class="nav-item">
-                    <a href="#llm-implementations" class="nav-link">LLM Implementations</a>
-                </div>
-                <div class="nav-item">
-                    <a href="#advanced-usage" class="nav-link">Advanced Usage</a>
-                </div>
-                <div class="nav-item">
-                    <a href="#utility-functions" class="nav-link">Utility Functions</a>
-                </div>
-                <div class="nav-item">
-                    <a href="#examples" class="nav-link">Real-World Examples</a>
-                </div>
-            </nav>
-        </aside>
+                <div class="nav-sub-item"><a href="#error-handling" class="nav-link">Error Handling</a></div>
+            </div>
+            <div class="nav-item"><a href="#llm-implementations" class="nav-link">LLM Implementations</a></div>
+            <div class="nav-item">
+                <a href="#advanced-usage" class="nav-link">Advanced Usage</a>
+                <div class="nav-sub-item"><a href="#web-applications" class="nav-link">Web Applications</a></div>
+                <div class="nav-sub-item"><a href="#base64-images" class="nav-link">Base64 Images</a></div>
+            </div>
+            <div class="nav-item"><a href="#utility-functions" class="nav-link">Utility Functions</a></div>
+            <div class="nav-item"><a href="#examples" class="nav-link">Real-World Examples</a></div>
+        </nav>
+    </aside>
+    <main class="content">
+        <section id="overview" class="section">
+            <h2>Overview</h2>
+            <p>A simple, reliable, and easy-to-use Python module for building and managing agents that interact with
+                different Large Language Models (LLMs).</p>
+            <p>This module provides a unified Agent abstraction that encapsulates core LLM interaction logic, allowing
+                developers to create agents powered by different LLMs through dependency injection.</p>
+        </section>
 
-        <!-- Main content area -->
-        <main class="content">
-            <section id="overview" class="section">
-                <h2>Overview</h2>
-                <p>A simple, reliable, and easy-to-use Python module for building and managing agents that interact with different Large Language Models (LLMs).</p>
-                <p>This module provides a unified Agent abstraction that encapsulates core LLM interaction logic, allowing developers to create agents powered by different LLMs through dependency injection.</p>
-            </section>
+        <section id="supported-models" class="section">
+            <h2>Supported Model List</h2>
+            <h3>Verified Models</h3>
+            <p>The following models have been tested and verified to work with this module:</p>
+            <pre><code class="language-bash">o4-mini-2025-04-16
+o3-mini-2025-01-31
+gpt-4.1-2025-04-14
+gpt-4o-2024-08-06
+gemini-2.5-pro-preview-05-06</code></pre>
 
-            <section id="features" class="section">
-                <h2>Features</h2>
-                <div class="features-container">
-                    <div class="feature-box">
-                        <h4>Unified Agent Interface</h4>
-                        <p>Create agents that work with any supported LLM</p>
-                    </div>
-                    <div class="feature-box">
-                        <h4>Multiple LLM Support</h4>
-                        <p>OpenAI GPT models and Google Gemini models</p>
-                    </div>
-                    <div class="feature-box">
-                        <h4>Conversation History</h4>
-                        <p>Built-in support for maintaining conversation context</p>
-                    </div>
-                    <div class="feature-box">
-                        <h4>Async/Await Support</h4>
-                        <p>Modern asynchronous API for non-blocking operations</p>
-                    </div>
-                    <div class="feature-box">
-                        <h4>Simple Configuration</h4>
-                        <p>Easy API key management through environment variables</p>
-                    </div>
-                    <div class="feature-box">
-                        <h4>Error Handling</h4>
-                        <p>Clear and specific error messages</p>
-                    </div>
-                    <div class="feature-box">
-                        <h4>Vision Capabilities</h4>
-                        <p>Support for processing images with compatible models</p>
-                    </div>
-                    <div class="feature-box">
-                        <h4>System Prompts</h4>
-                        <p>Define agent personality and behavior with customizable prompts</p>
-                    </div>
-                </div>
-            </section>
+            <h3>Unverified Models</h3>
+            <p>These models may work but haven't been fully tested:</p>
+            <div class="table-container">
+                <table>
+                    <thead>
+                    <tr>
+                        <th>Provider</th>
+                        <th>Models</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr>
+                        <td>OpenAI</td>
+                        <td>
+                            gpt-4-turbo, gpt-4-vision-preview, gpt-4-1106-preview, gpt-4-0613,
+                            gpt-3.5-turbo, gpt-3.5-turbo-instruct, gpt-3.5-turbo-0125, gpt-3.5-turbo-1106
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Google</td>
+                        <td>
+                            gemini-1.5-pro, gemini-1.5-flash, gemini-1.0-pro,
+                            gemini-1.0-pro-vision, gemini-1.0-pro-vision-latest
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Anthropic</td>
+                        <td>
+                            claude-3-opus-20240229, claude-3-sonnet-20240229,
+                            claude-3-haiku-20240307, claude-2.1, claude-2.0
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="highlight-box">
+                <div class="highlight-box-title">Note</div>
+                <p>When using models not explicitly listed under "Verified Models", you may need to adjust parameters
+                    like <span class="inline-code">max_output_tokens</span> and ensure the appropriate vision-capable
+                    model is selected for image processing.</p>
+            </div>
+        </section>
 
-            <section id="installation" class="section">
-                <h2>Installation</h2>
-                <p>Clone the repository:</p>
-                <pre><code class="language-bash">git clone https://github.com/ZhuoQiuMcgill/LLM_AGENT.git
+        <section id="features" class="section">
+            <h2>Features</h2>
+            <div class="features-container">
+                <div class="feature-box"><h4>Unified Agent Interface</h4>
+                    <p>Create agents that work with any supported LLM</p></div>
+                <div class="feature-box"><h4>Multiple LLM Support</h4>
+                    <p>OpenAI GPT models and Google Gemini models</p></div>
+                <div class="feature-box"><h4>Conversation History</h4>
+                    <p>Built-in support for maintaining conversation context</p></div>
+                <div class="feature-box"><h4>Async/Await Support</h4>
+                    <p>Modern asynchronous API for non-blocking operations</p></div>
+                <div class="feature-box"><h4>Simple Configuration</h4>
+                    <p>Easy API key management through environment variables</p></div>
+                <div class="feature-box"><h4>Error Handling</h4>
+                    <p>Clear and specific error messages</p></div>
+                <div class="feature-box"><h4>Vision Capabilities</h4>
+                    <p>Support for processing images with compatible models</p></div>
+                <div class="feature-box"><h4>System Prompts</h4>
+                    <p>Define agent personality and behavior with customizable prompts</p></div>
+            </div>
+        </section>
+
+        <section id="installation" class="section">
+            <h2>Installation</h2>
+            <p>Clone the repository:</p>
+            <pre><code class="language-bash">git clone https://github.com/ZhuoQiuMcgill/LLM_AGENT.git
 cd LLM_AGENT</code></pre>
+            <p>Install dependencies:</p>
+            <pre><code class="language-bash">pip install -r requirements.txt</code></pre>
+        </section>
 
-                <p>Install dependencies:</p>
-                <pre><code class="language-bash">pip install -r requirements.txt</code></pre>
-            </section>
-
-            <section id="quick-start" class="section">
-                <h2>Quick Start</h2>
-                <pre><code class="language-python">import asyncio
+        <section id="quick-start" class="section">
+            <h2>Quick Start</h2>
+            <pre><code class="language-python">import asyncio
 from agent_module import Agent, GPTModel, load_env_file
 
 # Load environment variables from .env file (API keys)
@@ -373,25 +422,26 @@ async def chat():
 
 # Run the async function
 asyncio.run(chat())</code></pre>
-            </section>
+        </section>
 
-            <section id="environment" class="section">
-                <h2>Environment Setup</h2>
-                <p>Create a <span class="inline-code">.env</span> file in your project root with your API keys:</p>
-                <pre><code># OpenAI API Key
+        <section id="environment" class="section">
+            <h2>Environment Setup</h2>
+            <p>Create a <span class="inline-code">.env</span> file in your project root with your API keys:</p>
+            <pre><code class="language-ini"># OpenAI API Key
 OPENAI_API_KEY=your_openai_api_key_here
-OPENAI_ORGANIZATION=your_organization_id_here  # Optional
+OPENAI_ORGANIZATION=your_organization_id_here # Optional
 
 # Google API Key (for Gemini models)
 GOOGLE_API_KEY=your_google_api_key_here</code></pre>
-            </section>
+        </section>
 
-            <section id="agent-class" class="section">
-                <h2>Agent Class: Detailed Usage</h2>
-                <p>The <span class="inline-code">Agent</span> class is the central component of this module. It wraps different LLM implementations with a unified interface and manages conversation history.</p>
+        <section id="agent-class" class="section">
+            <h2>Agent Class: Detailed Usage</h2>
+            <p>The <span class="inline-code">Agent</span> class is the central component of this module. It wraps
+                different LLM implementations with a unified interface and manages conversation history.</p>
 
-                <h3 id="creating-agent">Creating an Agent</h3>
-                <pre><code class="language-python">from agent_module import Agent, GPTModel, InMemoryHistoryManager
+            <h3 id="creating-agent">Creating an Agent</h3>
+            <pre><code class="language-python">from agent_module import Agent, GPTModel, InMemoryHistoryManager
 
 # Create a custom history manager (optional)
 history_manager = InMemoryHistoryManager(max_messages=50)
@@ -399,16 +449,16 @@ history_manager = InMemoryHistoryManager(max_messages=50)
 # Create an agent with the GPT model
 agent = Agent(
     llm_interface=GPTModel(model="gpt-4o"),
-    history_manager=history_manager,  # Optional
-    name="GPT Assistant",             # Optional
+    history_manager=history_manager, # Optional
+    name="GPT Assistant", # Optional
     system_prompt="You are a helpful assistant specialized in explaining complex topics in simple terms.",
     image_system_prompt="You are a visual assistant that can analyze images and provide detailed explanations.",
-    vision_model_override="gpt-4o",   # Override model for image processing
-    max_image_size=(1024, 1024),     # Resize images before processing
+    vision_model_override="gpt-4o", # Override model for image processing
+    max_image_size=(1024, 1024), # Resize images before processing
 )</code></pre>
 
-                <h3 id="processing-text">Processing Regular Text Inputs</h3>
-                <pre><code class="language-python"># Process a single text message
+            <h3 id="processing-text">Processing Regular Text Inputs</h3>
+            <pre><code class="language-python"># Process a single text message
 response = await agent.process("Can you explain quantum computing in simple terms?")
 
 # Alternative method name (alias for process)
@@ -418,13 +468,13 @@ response = await agent.run("What is the difference between AI, ML, and deep lear
 response = await agent.process(
     "Write a creative story about space exploration.",
     config={
-        "temperature": 0.9,           # Increase creativity
-        "max_output_tokens": 2000,    # Request longer response
+        "temperature": 0.9, # Increase creativity
+        "max_output_tokens": 2000, # Request longer response
     }
 )</code></pre>
 
-                <h3 id="processing-images">Processing Images with Text</h3>
-                <pre><code class="language-python"># Process text with an image file
+            <h3 id="processing-images">Processing Images with Text</h3>
+            <pre><code class="language-python"># Process text with an image file
 response = await agent.process_with_image(
     "What can you tell me about this image?",
     image_path="path/to/your/image.jpg"
@@ -435,28 +485,97 @@ response = await agent.process_with_image(
     "Explain what's happening in this diagram.",
     image_path="path/to/diagram.png",
     config={
-        "temperature": 0.2,           # More precise responses
-        "max_output_tokens": 1000,    # Control response length
+        "temperature": 0.2, # More precise responses
+        "max_output_tokens": 1000, # Control response length
     }
-)
+)</code></pre>
 
-# Process with binary image data (e.g., from web uploads)
+            <h3 id="binary-images">Processing Images from Binary Data</h3>
+            <p>For working with binary image data directly (such as from web uploads or memory):</p>
+            <pre><code class="language-python"># Process with binary image data from file
 with open("path/to/image.jpg", "rb") as img_file:
     image_data = img_file.read()
 
 response = await agent.process_with_image_bin(
     "Describe the objects in this image.",
     image_data=image_data,
-    mime_type="image/jpeg"  # Optional, will try to detect if not provided
+    mime_type="image/jpeg" # Specify MIME type
+)
+
+# Process image data from web upload (e.g., in a FastAPI application)
+# @app.post("/analyze-image") # Example decorator
+# async def analyze_image(file: UploadFile, prompt: str): # Example function signature
+#     contents = await file.read()
+#     mime_type = file.content_type # Get MIME type from upload
+
+#     response = await agent.process_with_image_bin(
+#         prompt,
+#         image_data=contents,
+#         mime_type=mime_type
+#     )
+#     return {"analysis": response}</code></pre>
+
+            <h3 id="mime-types">Supported MIME Types for Binary Images</h3>
+            <p>When using <span class="inline-code">process_with_image_bin</span>, the following MIME types are
+                supported:</p>
+            <ul>
+                <li><span class="inline-code">image/jpeg</span> - JPEG images (default if no MIME type is specified)
+                </li>
+                <li><span class="inline-code">image/png</span> - PNG images</li>
+                <li><span class="inline-code">image/gif</span> - GIF images (note: only the first frame will be
+                    processed)
+                </li>
+                <li><span class="inline-code">image/webp</span> - WebP images</li>
+                <li><span class="inline-code">image/bmp</span> - BMP images</li>
+                <li><span class="inline-code">image/tiff</span> - TIFF images</li>
+                <li><span class="inline-code">image/svg+xml</span> - SVG images (support varies by model)</li>
+            </ul>
+            <p>Example with different MIME types:</p>
+            <pre><code class="language-python"># Process a PNG image
+with open("chart.png", "rb") as img_file:
+    png_data = img_file.read()
+
+response = await agent.process_with_image_bin(
+    "Analyze this chart and provide key insights.",
+    image_data=png_data,
+    mime_type="image/png"
+)
+
+# Process a WebP image
+with open("photo.webp", "rb") as img_file:
+    webp_data = img_file.read()
+
+response = await agent.process_with_image_bin(
+    "What's shown in this photo?",
+    image_data=webp_data,
+    mime_type="image/webp"
 )</code></pre>
 
-                <h3 id="system-prompts">System Prompts and Image Processing</h3>
-                <div class="highlight-box">
-                    <div class="highlight-box-title">System Prompts</div>
-                    <p>The system prompt is used to define the agent's behavior and capabilities. When processing both text and images, the system prompt applies to the combined input.</p>
-                </div>
+            <h4>Automatic MIME Type Detection</h4>
+            <p>When using Google's Gemini model and no MIME type is provided, the module will attempt to detect the MIME
+                type automatically if the <span class="inline-code">python-magic</span> library is installed:</p>
+            <pre><code class="language-bash"># Install python-magic for MIME type detection
+pip install python-magic
 
-                <pre><code class="language-python"># Create an agent with a system prompt that works for text and images
+# For Windows, additional setup may be required:
+pip install python-magic-bin</code></pre>
+            <pre><code class="language-python"># The module will auto-detect MIME type if not provided
+with open("unknown_image_type.img", "rb") as img_file:
+    image_data = img_file.read()
+
+response = await agent.process_with_image_bin(
+    "What is in this image?",
+    image_data=image_data,
+    # mime_type not provided - will attempt to detect
+)</code></pre>
+
+            <h3 id="system-prompts">System Prompts and Image Processing</h3>
+            <div class="highlight-box">
+                <div class="highlight-box-title">System Prompts</div>
+                <p>The system prompt is used to define the agent's behavior and capabilities. When processing both text
+                    and images, the system prompt applies to the combined input.</p>
+            </div>
+            <pre><code class="language-python"># Create an agent with a system prompt that works for text and images
 agent = Agent(
     llm_interface=GPTModel(model="gpt-4o"),
     system_prompt="You are a helpful assistant. When analyzing images, be detailed and focus on key elements."
@@ -467,17 +586,15 @@ response = await agent.process_with_image(
     "What's in this image and what's significant about it?",
     image_path="path/to/image.jpg"
 )</code></pre>
-
-                <p>For specialized image processing needs, you can provide a separate image system prompt:</p>
-
-                <pre><code class="language-python">agent = Agent(
+            <p>For specialized image processing needs, you can provide a separate image system prompt:</p>
+            <pre><code class="language-python">agent = Agent(
     llm_interface=GPTModel(model="gpt-4o"),
     system_prompt="You are a helpful assistant for general questions.",
     image_system_prompt="You are a visual analysis expert. When examining images, describe all visual elements in detail."
 )</code></pre>
 
-                <h3 id="conversation-history">Managing Conversation History</h3>
-                <pre><code class="language-python"># Reset conversation history
+            <h3 id="conversation-history">Managing Conversation History</h3>
+            <pre><code class="language-python"># Reset conversation history
 agent.reset_history()
 
 # Create an agent that limits history
@@ -490,79 +607,33 @@ agent = Agent(llm_interface=llm, history_manager=history)
 response1 = await agent.process("Hello, I'm researching renewable energy.")
 response2 = await agent.process("What are the most promising technologies?")
 # The agent will remember the context from the first message</code></pre>
-
-                <p>Testing connection:</p>
-                <pre><code class="language-python">async def test_connection():
+            <p>Testing connection:</p>
+            <pre><code class="language-python">async def test_connection():
     try:
         result = await agent.connection_test()
         print(f"Connection test result: {result}")
     except Exception as e:
         print(f"Connection test failed: {str(e)}")
 
-asyncio.run(test_connection())</code></pre>
-            </section>
+asyncio.run(test_connection()) # Example call</code></pre>
 
-            <section id="llm-implementations" class="section">
-                <h2>LLM Implementations</h2>
-
-                <h3>OpenAI GPT Models</h3>
-                <pre><code class="language-python">from agent_module import GPTModel
-
-# Create a GPT model implementation
-gpt = GPTModel(
-    model="gpt-4o",                  # Optional: The GPT model to use
-    api_key=None,                    # Optional: OpenAI API key (if None, loads from env)
-    organization=None,               # Optional: OpenAI organization ID
-    max_output_tokens=8192,          # Optional: Maximum number of tokens to generate
-    temperature=1.0,                 # Optional: Controls randomness (0.0 to 2.0)
-    default_system_prompt=None,      # Optional: Default system prompt
-)</code></pre>
-
-                <h3>Google Gemini Models</h3>
-                <pre><code class="language-python">from agent_module import GeminiModel
-
-# Create a Gemini model implementation
-gemini = GeminiModel(
-    model="gemini-pro",             # Optional: The Gemini model to use
-    api_key=None,                   # Optional: Google AI API key (if None, loads from env)
-    temperature=0.7,                # Optional: Controls randomness (0.0 to 1.0)
-    max_output_tokens=65536,        # Optional: Maximum number of tokens to generate
-    top_p=0.95,                     # Optional: Nucleus sampling parameter
-    top_k=40,                       # Optional: Top-k sampling parameter
-    default_system_prompt=None,     # Optional: Default system prompt
-)</code></pre>
-            </section>
-
-            <section id="advanced-usage" class="section">
-                <h2>Advanced Usage</h2>
-
-                <h3>Using Different Models for Text and Images</h3>
-                <pre><code class="language-python">from agent_module import Agent, GPTModel
-
-# Create an agent that uses different models for different tasks
-agent = Agent(
-    llm_interface=GPTModel(model="gpt-3.5-turbo"),  # Lower cost for text-only
-    vision_model_override="gpt-4o",                # Higher capability for vision
-)
-
-# Text-only uses the base model (gpt-3.5-turbo)
-await agent.process("What's the capital of France?")
-
-# Image processing uses the override model (gpt-4o)
-await agent.process_with_image("What's in this image?", "image.jpg")</code></pre>
-
-                <h3>Handling Images from Web Applications</h3>
-                <pre><code class="language-python">async def handle_upload(file_data, prompt):
-    # file_data is the binary data from the upload
-    response = await agent.process_with_image_bin(
-        prompt,
-        image_data=file_data,
-        mime_type="image/jpeg"  # Set based on upload info
-    )
-    return response</code></pre>
-
-                <h3>Error Handling</h3>
-                <pre><code class="language-python">from agent_module import AgentError, LLMAPIError, ConfigurationError, HistoryError
+            <h3 id="error-handling">Error Handling</h3>
+            <p>Proper error handling is crucial for robust agent interactions. The module defines several custom
+                exceptions:</p>
+            <ul>
+                <li><span class="inline-code">AgentError</span>: Base class for all agent-specific errors.</li>
+                <li><span class="inline-code">LLMAPIError</span>: For errors originating from the LLM provider's API
+                    (e.g., authentication issues, rate limits).
+                </li>
+                <li><span class="inline-code">ConfigurationError</span>: For issues with agent or model configuration
+                    (e.g., missing API keys, invalid model names).
+                </li>
+                <li><span class="inline-code">HistoryError</span>: For errors related to conversation history
+                    management.
+                </li>
+            </ul>
+            <p>Here's an example of how to catch these exceptions:</p>
+            <pre><code class="language-python">from agent_module import AgentError, LLMAPIError, ConfigurationError, HistoryError
 
 try:
     response = await agent.process("Hello")
@@ -570,15 +641,185 @@ except LLMAPIError as e:
     print(f"API Error: {str(e)}")
 except ConfigurationError as e:
     print(f"Configuration Error: {str(e)}")
-except AgentError as e:
-    print(f"General Agent Error: {str(e)}")</code></pre>
-            </section>
+except HistoryError as e:
+    print(f"History Error: {str(e)}")
+except AgentError as e: # General AgentError should be caught last among these
+    print(f"General Agent Error: {str(e)}")
+except Exception as e: # Catch any other unexpected errors
+    print(f"An unexpected error occurred: {str(e)}")</code></pre>
+        </section>
+        <section id="llm-implementations" class="section">
+            <h2>LLM Implementations</h2>
+            <h3>OpenAI GPT Models</h3>
+            <pre><code class="language-python">from agent_module import GPTModel
 
-            <section id="utility-functions" class="section">
-                <h2>Utility Functions</h2>
+# Create a GPT model implementation
+gpt = GPTModel(
+    model="gpt-4o",             # Optional: The GPT model to use
+    api_key=None,               # Optional: OpenAI API key (if None, loads from env)
+    organization=None,          # Optional: OpenAI organization ID
+    max_output_tokens=8192,     # Optional: Maximum number of tokens to generate
+    temperature=1.0,            # Optional: Controls randomness (0.0 to 2.0)
+    default_system_prompt=None, # Optional: Default system prompt
+)</code></pre>
 
-                <h3>Configuration Loading</h3>
-                <pre><code class="language-python">from agent_module import load_config, create_llm_config
+            <h3>Google Gemini Models</h3>
+            <pre><code class="language-python">from agent_module import GeminiModel
+
+# Create a Gemini model implementation
+gemini = GeminiModel(
+    model="gemini-pro",         # Optional: The Gemini model to use
+    api_key=None,               # Optional: Google AI API key (if None, loads from env)
+    temperature=0.7,            # Optional: Controls randomness (0.0 to 1.0)
+    max_output_tokens=65536,    # Optional: Maximum number of tokens to generate
+    top_p=0.95,                 # Optional: Nucleus sampling parameter
+    top_k=40,                   # Optional: Top-k sampling parameter
+    default_system_prompt=None, # Optional: Default system prompt
+)</code></pre>
+        </section>
+
+        <section id="advanced-usage" class="section">
+            <h2>Advanced Usage</h2>
+            <h3>Using Different Models for Text and Images</h3>
+            <pre><code class="language-python">from agent_module import Agent, GPTModel
+
+# Create an agent that uses different models for different tasks
+agent = Agent(
+    llm_interface=GPTModel(model="gpt-3.5-turbo"), # Lower cost for text-only
+    vision_model_override="gpt-4o",                # Higher capability for vision
+)
+
+# Text-only uses the base model (gpt-3.5-turbo)
+# await agent.process("What's the capital of France?")
+
+# Image processing uses the override model (gpt-4o)
+# await agent.process_with_image("What's in this image?", "image.jpg")</code></pre>
+
+            <h3 id="web-applications">Web Application Integration</h3>
+            <h4>Basic Handler Example</h4>
+            <pre><code class="language-python">async def handle_upload(file_data, prompt):
+    # file_data is the binary data from the upload
+    response = await agent.process_with_image_bin(
+        prompt,
+        image_data=file_data,
+        mime_type="image/jpeg" # Set based on upload info
+    )
+    return response</code></pre>
+
+            <h4>FastAPI Example</h4>
+            <pre><code class="language-python"># FastAPI example
+from fastapi import FastAPI, UploadFile, File, Form # Ensure these are imported
+from agent_module import Agent, GPTModel, load_env_file
+
+app = FastAPI()
+load_env_file()
+
+# Create agent
+agent = Agent(
+    llm_interface=GPTModel(model="gpt-4o"),
+    system_prompt="You are a helpful image analysis assistant."
+)
+
+@app.post("/analyze")
+async def analyze_image_fastapi( # Renamed to avoid conflict if running in same scope
+    file: UploadFile = File(...),
+    prompt: str = Form(...)
+):
+    # Read file contents
+    contents = await file.read()
+
+    # Get content type from upload
+    mime_type = file.content_type
+
+    # Process with agent
+    response = await agent.process_with_image_bin(
+        prompt,
+        image_data=contents,
+        mime_type=mime_type
+    )
+
+    return {"analysis": response}</code></pre>
+
+            <h4>Flask Example</h4>
+            <pre><code class="language-python"># Flask example
+from flask import Flask, request, jsonify # Ensure these are imported
+import asyncio
+from agent_module import Agent, GPTModel, load_env_file
+
+app_flask = Flask(__name__) # Renamed to avoid conflict
+load_env_file()
+
+# Create agent
+agent_flask = Agent( # Renamed to avoid conflict
+    llm_interface=GPTModel(model="gpt-4o"),
+    system_prompt="You are a helpful image analysis assistant."
+)
+
+@app_flask.route("/analyze", methods=["POST"])
+def analyze_image_flask(): # Renamed to avoid conflict
+    if 'file' not in request.files:
+        return jsonify({"error": "No file part"}), 400
+
+    file = request.files['file']
+    prompt = request.form.get('prompt', 'What is in this image?')
+
+    # Read binary data
+    image_data = file.read()
+    mime_type = file.content_type
+
+    # Run async function in sync context
+    response = asyncio.run(agent_flask.process_with_image_bin(
+        prompt,
+        image_data=image_data,
+        mime_type=mime_type
+    ))
+
+    return jsonify({"analysis": response})</code></pre>
+
+            <h3 id="base64-images">Processing Base64-Encoded Images</h3>
+            <p>For working with base64-encoded images, common in web applications:</p>
+            <pre><code class="language-python">import base64
+import asyncio
+# from agent_module import Agent, GPTModel, load_env_file # Assuming already loaded
+
+# load_env_file() # Assuming already loaded
+# agent = Agent(llm_interface=GPTModel(model="gpt-4o")) # Assuming agent is created
+
+async def analyze_base64_image(base64_string, prompt):
+    # Remove data URL prefix if present
+    if "," in base64_string:
+        # Format: data:image/jpeg;base64,/9j/4AAQSkZJRg...
+        mime_type_part, base64_part = base64_string.split(",", 1)
+        mime_type = mime_type_part.split(":")[1].split(";")[0]
+        base64_string = base64_part
+    else:
+        # Assume JPEG if not specified
+        mime_type = "image/jpeg"
+
+    # Decode base64 to binary
+    image_data = base64.b64decode(base64_string)
+
+    # Process with agent
+    return await agent.process_with_image_bin(
+        prompt,
+        image_data=image_data,
+        mime_type=mime_type
+    )
+
+# Example usage
+async def main_base64_example(): # Renamed for clarity
+    # Example base64 string (shortened)
+    base64_image = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAUDBA..."
+    result = await analyze_base64_image(base64_image, "What's in this image?")
+    print(result)
+
+asyncio.run(main_base64_example()) # Example call</code></pre>
+        </section>
+
+        <section id="utility-functions" class="section">
+            <h2>Utility Functions</h2>
+            <h3>Configuration Loading</h3>
+            <pre><code class="language-python">from agent_module import load_config, create_llm_config
 
 # Load configuration from environment variables or .env file
 config = load_config(
@@ -592,25 +833,25 @@ openai_config = create_llm_config(
     "openai"                 # Required: LLM type ("openai" or "google")
 )</code></pre>
 
-                <h3>Environment File Loading</h3>
-                <pre><code class="language-python">from agent_module import load_env_file
+            <h3>Environment File Loading</h3>
+            <pre><code class="language-python">from agent_module import load_env_file
 
 # Load environment variables from .env file
 load_env_file(
     env_file=None            # Optional: Path to .env file (default: ".env")
 )</code></pre>
 
-                <h3>API Key Retrieval</h3>
-                <pre><code class="language-python">from agent_module import get_api_key
+            <h3>API Key Retrieval</h3>
+            <pre><code class="language-python">from agent_module import get_api_key
 
-# Get API key from environment variables
+Get API key from environment variables
 api_key = get_api_key(
-    env_var_name,            # Required: Name of the environment variable
-    env_file=None            # Optional: Path to .env file
+                "YOUR_ENV_VAR_NAME",     # Required: Name of the environment variable
+                env_file=None            # Optional: Path to .env file
 )</code></pre>
 
-                <h3>Logging Setup</h3>
-                <pre><code class="language-python">from agent_module import setup_logging
+            <h3>Logging Setup</h3>
+            <pre><code class="language-python">from agent_module import setup_logging
 import logging
 
 # Set up logging
@@ -619,17 +860,16 @@ setup_logging(
     format_string=None,      # Optional: Log format string
     log_file=None            # Optional: Path to log file
 )</code></pre>
-            </section>
+        </section>
 
-            <section id="examples" class="section">
-                <h2>Real-World Examples</h2>
-
-                <h3>Chat Application Example</h3>
-                <pre><code class="language-python">import asyncio
-from agent_module import Agent, GPTModel, load_env_file
+        <section id="examples" class="section">
+            <h2>Real-World Examples</h2>
+            <h3>Chat Application Example</h3>
+            <pre><code class="language-python">import asyncio
+from agent_module import Agent, GPTModel, load_env_file # Assuming loaded
 
 # Load API keys
-load_env_file()
+# load_env_file()
 
 # Set up the agent
 agent = Agent(
@@ -652,15 +892,15 @@ async def chat_loop():
         print(f"Assistant: {response}")
 
 # Run the chat loop
-asyncio.run(chat_loop())</code></pre>
+asyncio.run(chat_loop()) # Example call</code></pre>
 
-                <h3>Image Analysis Application</h3>
-                <pre><code class="language-python">import asyncio
+            <h3>Image Analysis Application</h3>
+            <pre><code class="language-python">import asyncio
 import os
-from agent_module import Agent, GPTModel, load_env_file
+from agent_module import Agent, GPTModel, load_env_file # Assuming loaded
 
 # Load API keys
-load_env_file()
+# load_env_file()
 
 # Set up the agent with vision capabilities
 agent = Agent(
@@ -669,7 +909,7 @@ agent = Agent(
 )
 
 # Function to analyze images in a directory
-async def analyze_images(directory, query="Describe this image in detail."):
+async def analyze_images_in_directory(directory, query="Describe this image in detail."): # Renamed
     results = {}
 
     for filename in os.listdir(directory):
@@ -688,40 +928,119 @@ async def analyze_images(directory, query="Describe this image in detail."):
     return results
 
 # Run the analysis
-async def main():
-    results = await analyze_images("./images", "What objects do you see in this image?")
+async def main_image_analysis_example(): # Renamed
+    # Ensure the "./images" directory exists and has images for this example to run
+    # if not os.path.exists("./images"):
+    #     os.makedirs("./images")
+    #     print("Created ./images directory. Please add images to it for analysis.")
+    #     return
+
+    results = await analyze_images_in_directory("./images", "What objects do you see in this image?")
 
     # Print or save results
     for filename, analysis in results.items():
         print(f"\n--- {filename} ---\n{analysis}\n")
 
-asyncio.run(main())</code></pre>
-            </section>
-        </main>
-    </div>
+asyncio.run(main_image_analysis_example()) # Example call</code></pre>
 
-    <script>
-        // Initialize syntax highlighting
-        document.addEventListener('DOMContentLoaded', () => {
-            hljs.highlightAll();
+            <h3>Intelligent Document Processing Example</h3>
+            <pre><code class="language-python">import asyncio
+import os
+# from PIL import Image # Ensure Pillow is installed: pip install Pillow
+# import pytesseract     # Ensure Tesseract OCR is installed and configured
+# from agent_module import Agent, GPTModel, load_env_file # Assuming loaded
+
+# Load environment variables
+# load_env_file()
+
+# Set up the agent
+# agent = Agent(
+#     llm_interface=GPTModel(model="gpt-4o"),
+#     system_prompt="You are a document analysis assistant specialized in extracting and analyzing information from documents."
+# )
+
+async def process_document_ocr(image_path): # Renamed
+    # First, extract text with OCR
+    extracted_text = "OCR extraction failed or not attempted."
+    try:
+        # from PIL import Image
+        # import pytesseract
+        # img = Image.open(image_path)
+        # extracted_text = pytesseract.image_to_string(img)
+        pass # Placeholder for actual OCR logic
+    except Exception as e:
+        print(f"OCR failed: {e}")
+        extracted_text = f"OCR extraction failed: {e}"
+
+    # Send both the image and extracted text to the LLM
+    prompt = f"""
+    I'm sending you a document image with OCR-extracted text.
+
+    OCR-extracted text:
+    {extracted_text}
+
+    Please:
+    1. Analyze the document type
+    2. Extract key information (dates, names, amounts, etc.)
+    3. Summarize the main content
+    4. Note any discrepancies between the image and OCR text (if applicable)
+    """
+
+    # Process with both text context and image
+    response = await agent.process_with_image(prompt, image_path)
+    return {
+        "ocr_text": extracted_text,
+        "analysis": response
+    }
+
+# Usage
+async def main_doc_processing_example(): # Renamed
+    # Ensure an image like "invoice.jpg" exists for this example
+    # if not os.path.exists("invoice.jpg"):
+    #     print("invoice.jpg not found. Please add a document image for processing.")
+    #     return
+
+    result = await process_document_ocr("invoice.jpg") # Example image
+    print("\n=== OCR EXTRACTED TEXT ===\n")
+    print(result["ocr_text"])
+    print("\n=== DOCUMENT ANALYSIS ===\n")
+    print(result["analysis"])
+
+asyncio.run(main_doc_processing_example()) # Example call</code></pre>
+        </section>
+    </main>
+</div>
+<script>
+    // Initialize syntax highlighting after the DOM is fully loaded
+    document.addEventListener('DOMContentLoaded', () =>
+    {
+        hljs.highlightAll();
+    });
+
+    // Smooth scrolling for navigation links
+    document.querySelectorAll('a[href^="#"]').forEach(anchor =>
+    {
+        anchor.addEventListener('click', function (e)
+        {
+            e.preventDefault();
+
+            const targetId = this.getAttribute('href');
+            const targetElement = document.querySelector(targetId);
+
+            if (targetElement)
+            {
+                // Calculate offset, considering potential fixed header (though not present here)
+                const headerOffset = 20; // Small offset for better visibility
+                const elementPosition = targetElement.getBoundingClientRect().top;
+                const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+
+                window.scrollTo({
+                    top: offsetPosition,
+                    behavior: 'smooth'
+                });
+            }
         });
-
-        // Smooth scrolling for navigation links
-        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-            anchor.addEventListener('click', function (e) {
-                e.preventDefault();
-
-                const targetId = this.getAttribute('href');
-                const targetElement = document.querySelector(targetId);
-
-                if (targetElement) {
-                    window.scrollTo({
-                        top: targetElement.offsetTop - 20,
-                        behavior: 'smooth'
-                    });
-                }
-            });
-        });
-    </script>
+    });
+</script>
 </body>
 </html>
