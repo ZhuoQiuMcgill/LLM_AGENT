@@ -339,8 +339,22 @@ def save_content(content: str, filename: str, filetype: str = None) -> str:
     # Create filepath with the correct extension
     filepath = f"{base_filename}.{filetype}"
 
-    # Validate the path is writable
-    filepath, _ = validate_writable_path(filepath)
+    # Get absolute path
+    filepath = validate_file_path(filepath)
+
+    # Get directory path
+    directory = os.path.dirname(filepath)
+
+    # Create directories if they don't exist
+    if directory:  # Only if directory is not empty
+        try:
+            os.makedirs(directory, exist_ok=True)
+            logger.debug(f"Ensured directory exists: {directory}")
+        except (OSError, PermissionError) as e:
+            raise IOError(f"Failed to create directory {directory}: {e}")
+
+    # Validate the path is writable (after ensuring directory exists)
+    filepath, _ = validate_writable_path(filepath, create_dirs=False)  # Don't recreate dirs
 
     # Write file with proper encoding and error handling
     try:
