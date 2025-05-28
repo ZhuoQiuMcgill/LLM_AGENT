@@ -5,7 +5,15 @@ from typing import Dict, List, Optional, Any
 
 # Use original imports
 import openai
-from openai import AsyncOpenAI, OpenAIError, AuthenticationError, RateLimitError, BadRequestError, APIError
+from openai import (
+    AsyncOpenAI,
+    OpenAIError,
+    AuthenticationError,
+    RateLimitError,
+    BadRequestError,
+    APIError,
+)
+
 from ..llm.base import LLMInterface
 from ..exceptions import LLMAPIError, ConfigurationError
 from ..utils.helpers import get_api_key
@@ -13,566 +21,403 @@ from ..utils.helpers import get_api_key
 logger = logging.getLogger(__name__)
 
 
-# Restore inheritance from LLMInterface
 class GPTModel(LLMInterface):
-    """
-    Implementation of LLMInterface for OpenAI's GPT models.
+    """Implementation of :class:`LLMInterface` for OpenAI GPT models.
 
-    This class handles authentication, API calls, and response parsing for
-    OpenAI's GPT models. It dynamically selects the correct token limit
-    parameter ('max_tokens' or 'max_completion_tokens') based on the model.
+    This class wraps OpenAI's *chat completions* endpoint, handling:
+    * **Authentication** and async client creation
+    * **Dynamic token‑limit parameter selection** (``max_tokens`` vs ``max_completion_tokens``)
+    * **JSON‑mode** forcing for older models (``response_format={"type":"json_object"}``)
+    * **Structured‑Output mode** (``response_format={"type":"json_schema", ...}``)
+    * **Vision** requests (text + image / image‑binary)
+    * Robust error handling mapped to the app's own exception hierarchy.
     """
 
-    # Define prefixes for models known or suspected to use max_completion_tokens
+    # Model‑prefixes that expect ``max_completion_tokens`` instead of ``max_tokens``
     MODELS_USING_MAX_COMPLETION_TOKENS_PREFIXES = ("o4-", "gpt-4o-", "o3-")
 
+    # Models known to support **JSON mode** (``response_format.type == json_object``)
+    JSON_SUPPORTED_MODELS = (
+        "gpt-4o",
+        "gpt-4o-mini",
+        "gpt-4-turbo",
+        "gpt-4-turbo-preview",
+        "gpt-3.5-turbo",
+        "gpt-3.5-turbo-0125",
+        "gpt-3.5-turbo-1106",
+    )
+
+    # Models that support **Structured Outputs** (json_schema / tool‑calling strict)
+    # – At the time of writing the same set as JSON‑mode, but kept separate for future‑proofing.
+    STRUCTURED_OUTPUT_SUPPORTED_MODELS = JSON_SUPPORTED_MODELS + ("o4-",)
+
     def __init__(
-            self,
-            model: str = "gpt-4o",  # Default to a newer model
-            api_key: Optional[str] = None,
-            organization: Optional[str] = None,
-            # Keep generic name for constructor, map later
-            max_output_tokens: int = 8192,
-            temperature: float = 1,
-            default_system_prompt: Optional[str] = None,
+        self,
+        model: str = "gpt-4o",
+        api_key: Optional[str] = None,
+        organization: Optional[str] = None,
+        max_output_tokens: int = 8192,
+        temperature: float = 1.0,
+        default_system_prompt: Optional[str] = None,
+        force_json_response: bool = False,
+        structured_output_schema: Optional[Dict[str, Any]] = None,
     ):
-        """
-        Initialize the GPT model.
+        """Create a new :class:`GPTModel` instance.
 
-        Args:
-            model: The specific GPT model ID to use (e.g., "gpt-4o", "o4-mini-...", "gpt-3.5-turbo").
-            api_key: OpenAI API key. If None, will attempt to load using get_api_key.
-            organization: OpenAI organization ID. Only required for organizational accounts.
-                If None, will attempt to load from environment variable "OPENAI_ORGANIZATION".
-            max_output_tokens: Maximum number of tokens to generate in the completion.
-                               This value will be mapped to either 'max_tokens' or
-                               'max_completion_tokens' depending on the model used.
-            temperature: Controls randomness in the output (0.0 to 2.0).
-            default_system_prompt: Optional default system prompt to use if none is provided.
-
-        Raises:
-            ConfigurationError: If the API key cannot be loaded or client initialization fails.
+        Args
+        ----
+        model:  OpenAI model name (e.g. ``"gpt-4o"``, ``"o4-mini-2025-04-16"``).
+        api_key:  Overrides ``OPENAI_API_KEY`` env‑var.
+        organization:  Optional OpenAI *organization* id.
+        max_output_tokens:  Default completion limit.
+        temperature:  Sampling temperature ``[0.0 – 2.0]``.
+        default_system_prompt:  Used when caller supplies no system prompt.
+        force_json_response:  Enable legacy JSON‑mode. Ignored when *structured_output_schema* is provided.
+        structured_output_schema:  JSON‑Schema dict that triggers **Structured Output** mode when not *None*.
         """
+
         self.model = model
         self.max_output_tokens = max_output_tokens
         self.temperature = temperature
-        self.default_system_prompt = default_system_prompt or "You are a helpful assistant."
+        self.default_system_prompt = (
+            default_system_prompt or "You are a helpful assistant."
+        )
+        self.force_json_response = force_json_response
+        self.structured_output_schema = structured_output_schema
 
-        # Restore original API key loading
+        # --- Auth & client --------------------------------------------------
         self.api_key = api_key or get_api_key("OPENAI_API_KEY")
         if not self.api_key:
-            # Use original ConfigurationError
             raise ConfigurationError(
-                "OpenAI API key not found. Please provide it or set OPENAI_API_KEY environment variable.")
+                "OpenAI API key not found. Provide it explicitly or set the OPENAI_API_KEY env‑var."
+            )
 
-        # Load organization if not provided (original logic)
         self.organization = organization or os.getenv("OPENAI_ORGANIZATION")
 
-        # Initialize async client (only include organization if it has a value)
         client_kwargs = {"api_key": self.api_key}
         if self.organization:
             client_kwargs["organization"] = self.organization
 
         try:
             self.client = AsyncOpenAI(**client_kwargs)
-            logger.info(f"AsyncOpenAI client initialized successfully for default model: {model}")
-        except Exception as e:
-            logger.error(f"Failed to initialize AsyncOpenAI client: {e}", exc_info=True)
-            # Use original ConfigurationError
-            raise ConfigurationError(f"Failed to initialize AsyncOpenAI client: {e}") from e
+            logger.info("AsyncOpenAI client initialised (model=%s)", model)
+        except Exception as exc:  # pragma: no cover
+            logger.exception("Failed to initialise AsyncOpenAI client")
+            raise ConfigurationError(f"Failed to initialise OpenAI client: {exc}") from exc
 
+    # ---------------------------------------------------------------------
+    # Public helpers
+    # ---------------------------------------------------------------------
+    def model_name(self) -> str:  # noqa: D401 – keeps original external api
+        return self.model
+
+    # ---------------------------------------------------------------------
+    # Async chat completions (text‑only)
+    # ---------------------------------------------------------------------
     async def generate_response(
             self,
             prompt: str,
             history: Optional[List[Dict[str, str]]] = None,
-            config: Optional[Dict[str, Any]] = None
+            config: Optional[Dict[str, Any]] = None,
     ) -> str:
-        """
-        Generate a response from the GPT model using the chat completions endpoint.
+        """Return the assistant reply for *prompt* (optionally with *history*)."""
 
-        Args:
-            prompt: The text prompt to send to the model.
-            history: Optional conversation history as a list of message dictionaries.
-            config: Optional configuration parameters for this specific request
-                    (e.g., overriding 'model', 'max_output_tokens', 'temperature').
+        request_config = self._prepare_request_config(config)
+        current_model = request_config.get("model", self.model)
+        current_max_tokens = request_config.get("max_output_tokens", self.max_output_tokens)
+        current_temperature = request_config.get("temperature", self.temperature)
+        force_json = request_config.get("force_json_response", self.force_json_response)
+        schema = request_config.get("structured_output_schema", self.structured_output_schema)
 
-        Returns:
-            A string containing the model's primary text response.
+        messages = self._prepare_messages(
+            prompt,
+            history,
+            request_config,
+            force_json=force_json,
+        )
 
-        Raises:
-            LLMAPIError: If there's an error with the OpenAI API call or response parsing.
-        """
-        current_model = self.model  # Initialize with default
-        try:
-            # Get request configuration by merging default and request-specific configs
-            request_config = self._prepare_request_config(config)
-            current_model = request_config.get("model", self.model)  # Update current_model
-            # Use the generic max_output_tokens from config or default
-            current_max_output_tokens = request_config.get("max_output_tokens", self.max_output_tokens)
-            current_temperature = request_config.get("temperature", self.temperature)
+        # --- Build API params --------------------------------------------
+        api_params: Dict[str, Any] = {
+            "model": current_model,
+            "messages": messages,
+            "temperature": current_temperature,
+        }
 
-            # Prepare messages for the API call
-            messages = self._prepare_messages(prompt, history, request_config)
-
-            logger.debug(f"Sending request to OpenAI API ({current_model}) with {len(messages)} messages.")
-
-            # Create base API parameters
-            api_params = {
-                "model": current_model,
-                "messages": messages,
-                "temperature": current_temperature,
+        # ----------------- Response‑format handling ----------------------
+        if schema is not None and self._supports_structured_output(current_model):
+            api_params["response_format"] = {
+                "type": "json_schema",
+                "json_schema": schema,
             }
+            logger.debug("Structured‑output mode enabled for model %s", current_model)
+        elif force_json and self._supports_json_response(current_model):
+            api_params["response_format"] = {"type": "json_object"}
+            logger.debug("Legacy JSON‑mode enabled for model %s", current_model)
+        elif force_json:
+            logger.warning(
+                "Model %s does not support JSON mode – continuing without enforced JSON.",
+                current_model,
+            )
 
-            # --- Dynamically set the correct token limit parameter ---
-            if current_model.startswith(self.MODELS_USING_MAX_COMPLETION_TOKENS_PREFIXES):
-                api_params["max_completion_tokens"] = current_max_output_tokens
-                logger.debug(f"Using 'max_completion_tokens': {current_max_output_tokens} for model {current_model}")
-            else:
-                api_params["max_tokens"] = current_max_output_tokens
-                logger.debug(f"Using 'max_tokens': {current_max_output_tokens} for model {current_model}")
-            # --- End dynamic parameter setting ---
+        # ----------------- Token‑limit parameter -------------------------
+        if current_model.startswith(self.MODELS_USING_MAX_COMPLETION_TOKENS_PREFIXES):
+            api_params["max_completion_tokens"] = current_max_tokens
+        else:
+            api_params["max_tokens"] = current_max_tokens
 
-            # Add other relevant parameters from config if needed
-            if 'top_p' in request_config:
-                api_params['top_p'] = request_config['top_p']
-            if 'frequency_penalty' in request_config:
-                api_params['frequency_penalty'] = request_config['frequency_penalty']
-            if 'presence_penalty' in request_config:
-                api_params['presence_penalty'] = request_config['presence_penalty']
-            if 'stop' in request_config:
-                api_params['stop'] = request_config['stop']
+        # ----------------- Optional params ------------------------------
+        for optional in ("top_p", "frequency_penalty", "presence_penalty", "stop"):
+            if optional in request_config:
+                api_params[optional] = request_config[optional]
 
-            # Make the API call using the chat completions endpoint
+        try:
             response = await self.client.chat.completions.create(**api_params)
-            logger.debug(
-                f"Received response from OpenAI API. Finish reason: {response.choices[0].finish_reason if response.choices else 'N/A'}")
+            return self._extract_text_or_raise(response)
+        except Exception as exc:
+            self._handle_openai_exception(exc, current_model)
 
-            # --- Robust Extraction of Text Content ---
-            if response.choices and len(response.choices) > 0:
-                message = response.choices[0].message
-                if message and message.content is not None:
-                    response_text = message.content.strip()
-                    logger.debug(f"Extracted response text (length: {len(response_text)}).")
-                    return response_text
-                else:
-                    logger.warning("OpenAI response message content is missing or None.")
-                    return ""  # Return empty string if content is missing/None
-            else:
-                logger.warning("OpenAI response does not contain 'choices'.")
-                # Use original LLMAPIError
-                raise LLMAPIError("OpenAI response structure invalid: No choices found.")
-
-        # --- Refined Error Handling using original custom exceptions ---
-        except AuthenticationError as e:
-            logger.error(f"OpenAI authentication error: {e}", exc_info=True)
-            error_body = e.body or {}
-            error_code = error_body.get("code", "unknown")
-            error_message = error_body.get("message", str(e))
-
-            if error_code == "invalid_api_key":
-                help_message = "Invalid OpenAI API key provided."
-            elif error_code == "mismatched_organization":
-                help_message = ("Organization ID mismatch. For personal keys, ensure no organization is set. "
-                                "For organizational keys, verify the ID.")
-            else:
-                help_message = f"Authentication failed: {error_message}"
-            # Use original LLMAPIError
-            raise LLMAPIError(help_message) from e
-
-        except RateLimitError as e:
-            logger.warning(f"OpenAI rate limit exceeded: {e}", exc_info=True)
-            error_body = e.body or {}
-            error_type = error_body.get("type", "unknown")
-            error_message = error_body.get("message", str(e))
-
-            if "insufficient_quota" in error_message or error_type == "insufficient_quota":
-                help_message = ("OpenAI API quota exceeded. Check billing details and usage limits at "
-                                "https://platform.openai.com/account/billing.")
-            else:
-                help_message = "OpenAI API rate limit hit. Please wait and retry, or reduce request frequency."
-            # Use original LLMAPIError
-            raise LLMAPIError(help_message) from e
-
-        except BadRequestError as e:
-            logger.error(f"OpenAI bad request error: {e}", exc_info=True)
-            error_body = e.body or {}
-            error_param = error_body.get("param")
-            error_message = error_body.get("message", str(e))
-            error_code = error_body.get("code")
-
-            if error_param:
-                help_message = f"Invalid parameter '{error_param}': {error_message}"
-            else:
-                help_message = f"Invalid request to OpenAI API: {error_message}"
-
-            if error_code == "unsupported_parameter" and "'max_tokens'" in str(
-                    error_param) and "max_completion_tokens" in error_message:
-                help_message += (f" (Model '{current_model}' likely requires 'max_completion_tokens'. "
-                                 f"Consider adding its prefix to MODELS_USING_MAX_COMPLETION_TOKENS_PREFIXES if needed.)")
-            # Use original LLMAPIError
-            raise LLMAPIError(help_message) from e
-
-        except APIError as e:
-            logger.error(f"OpenAI API error: {e}", exc_info=True)
-            # Use original LLMAPIError
-            raise LLMAPIError(f"OpenAI API returned an error: {e}") from e
-
-        except OpenAIError as e:
-            logger.error(f"General OpenAI error: {e}", exc_info=True)
-            # Use original LLMAPIError
-            raise LLMAPIError(f"An OpenAI error occurred: {e}") from e
-
-        except Exception as e:
-            # Catch unexpected errors and wrap in LLMAPIError as per original pattern
-            logger.error(f"Unexpected error during OpenAI API call: {e}", exc_info=True)
-            raise LLMAPIError(f"An unexpected error occurred: {e}") from e
-
+    # ---------------------------------------------------------------------
+    # Vision – text + image‑file path
+    # ---------------------------------------------------------------------
     async def process_with_image(
             self,
             text: str,
             image_path: str,
             history: Optional[List[Dict[str, str]]] = None,
-            config: Optional[Dict[str, Any]] = None
+            config: Optional[Dict[str, Any]] = None,
     ) -> str:
-        """
-        Generate a response from the GPT model using both text and image inputs.
+        if not os.path.exists(image_path):
+            raise LLMAPIError(f"Image file not found: {image_path}")
 
-        Args:
-            text: The text prompt to send to the model.
-            image_path: Path to the image file to include with the prompt.
-            history: Optional conversation history as a list of message dictionaries.
-            config: Optional configuration parameters for this specific request.
+        with open(image_path, "rb") as fh:
+            image_bytes = fh.read()
 
-        Returns:
-            A string containing the model's primary text response.
+        return await self.process_with_image_bin(
+            text=text,
+            image_data=image_bytes,
+            mime_type="image/jpeg",  # assume jpg – override by passing mime in *_bin*
+            history=history,
+            config=config,
+        )
 
-        Raises:
-            LLMAPIError: If there's an error with the OpenAI API call or response parsing.
-        """
-        try:
-            # Get request configuration by merging default and request-specific configs
-            request_config = self._prepare_request_config(config)
-            current_model = request_config.get("model", self.model)
-            current_temperature = request_config.get("temperature", self.temperature)
-
-            # Ensure vision-compatible model
-            if not ("vision" in current_model or current_model == "gpt-4o"):
-                logger.warning(
-                    f"Model {current_model} may not support vision capabilities. Consider using 'gpt-4-vision-preview' or 'gpt-4o'.")
-
-            # Read and encode image
-            if not os.path.exists(image_path):
-                raise FileNotFoundError(f"Image file not found: {image_path}")
-
-            with open(image_path, "rb") as image_file:
-                image_data = base64.b64encode(image_file.read()).decode('utf-8')
-
-            # Prepare messages
-            messages = []
-
-            # Add system message if provided
-            system_prompt = request_config.get("system_prompt")
-            if system_prompt:
-                messages.append({"role": "system", "content": system_prompt})
-
-            # Add history if provided
-            if history:
-                for msg in history:
-                    if isinstance(msg, dict) and "role" in msg and "content" in msg:
-                        messages.append(msg)
-                    else:
-                        logger.warning(f"Skipping invalid history item: {msg}")
-
-            # Add user message with text and image
-            user_message = {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": text},
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/jpeg;base64,{image_data}"
-                        }
-                    }
-                ]
-            }
-            messages.append(user_message)
-
-            logger.debug(f"Sending request to OpenAI API ({current_model}) with text and image.")
-
-            # Create API parameters
-            api_params = {
-                "model": current_model,
-                "messages": messages,
-                "temperature": current_temperature,
-            }
-
-            # Set max_tokens parameter appropriately
-            if current_model.startswith(self.MODELS_USING_MAX_COMPLETION_TOKENS_PREFIXES):
-                api_params["max_completion_tokens"] = request_config.get("max_output_tokens", self.max_output_tokens)
-            else:
-                api_params["max_tokens"] = request_config.get("max_output_tokens", self.max_output_tokens)
-
-            # Add other parameters from config
-            if 'top_p' in request_config:
-                api_params['top_p'] = request_config['top_p']
-            if 'frequency_penalty' in request_config:
-                api_params['frequency_penalty'] = request_config['frequency_penalty']
-            if 'presence_penalty' in request_config:
-                api_params['presence_penalty'] = request_config['presence_penalty']
-            if 'stop' in request_config:
-                api_params['stop'] = request_config['stop']
-
-            # Make API call
-            response = await self.client.chat.completions.create(**api_params)
-
-            logger.debug(
-                f"Received response from OpenAI API. Finish reason: {response.choices[0].finish_reason if response.choices else 'N/A'}")
-
-            # Extract response
-            if response.choices and len(response.choices) > 0:
-                message = response.choices[0].message
-                if message and message.content is not None:
-                    response_text = message.content.strip()
-                    logger.debug(f"Extracted response text (length: {len(response_text)}).")
-                    return response_text
-                else:
-                    logger.warning("OpenAI response message content is missing or None.")
-                    return ""
-            else:
-                logger.warning("OpenAI response does not contain 'choices'.")
-                raise LLMAPIError("OpenAI response structure invalid: No choices found.")
-
-        except FileNotFoundError as e:
-            logger.error(f"Image file error: {e}", exc_info=True)
-            raise LLMAPIError(f"Image file error: {e}")
-        except AuthenticationError as e:
-            logger.error(f"OpenAI authentication error: {e}", exc_info=True)
-            raise LLMAPIError(f"Authentication failed: {str(e)}")
-        except RateLimitError as e:
-            logger.warning(f"OpenAI rate limit exceeded: {e}", exc_info=True)
-            raise LLMAPIError(f"Rate limit exceeded: {str(e)}")
-        except BadRequestError as e:
-            logger.error(f"OpenAI bad request error: {e}", exc_info=True)
-            raise LLMAPIError(f"Invalid request: {str(e)}")
-        except APIError as e:
-            logger.error(f"OpenAI API error: {e}", exc_info=True)
-            raise LLMAPIError(f"OpenAI API returned an error: {str(e)}")
-        except OpenAIError as e:
-            logger.error(f"General OpenAI error: {e}", exc_info=True)
-            raise LLMAPIError(f"An OpenAI error occurred: {str(e)}")
-        except Exception as e:
-            logger.error(f"Unexpected error during OpenAI API call: {e}", exc_info=True)
-            raise LLMAPIError(f"An unexpected error occurred: {str(e)}")
-
+    # ---------------------------------------------------------------------
+    # Vision – text + image bytes
+    # ---------------------------------------------------------------------
     async def process_with_image_bin(
             self,
             text: str,
             image_data: bytes,
             mime_type: Optional[str] = None,
             history: Optional[List[Dict[str, str]]] = None,
-            config: Optional[Dict[str, Any]] = None
+            config: Optional[Dict[str, Any]] = None,
     ) -> str:
-        """
-        Generate a response from the GPT model using both text and binary image data.
+        if not image_data:
+            raise LLMAPIError("Image data is empty")
 
-        This method is useful for processing images directly from memory without saving to disk,
-        such as handling file uploads in web applications.
+        request_config = self._prepare_request_config(config)
+        current_model = request_config.get("model", self.model)
+        current_temperature = request_config.get("temperature", self.temperature)
+        force_json = request_config.get("force_json_response", self.force_json_response)
+        schema = request_config.get("structured_output_schema", self.structured_output_schema)
 
-        Args:
-            text: The text prompt to send to the model.
-            image_data: Binary image data.
-            mime_type: Optional MIME type of the image (e.g., "image/jpeg", "image/png").
-                      If None, defaults to "image/jpeg".
-            history: Optional conversation history as a list of message dictionaries.
-            config: Optional configuration parameters for this specific request.
+        # Vision‑capable model safety hint (does not hard‑fail)
+        if "vision" not in current_model and current_model != "gpt-4o":
+            logger.warning(
+                "Model %s may not support vision – consider 'gpt-4o' or a vision‑preview model.",
+                current_model,
+            )
 
-        Returns:
-            A string containing the model's primary text response.
+        mime_type = mime_type or "image/jpeg"
+        image_b64 = base64.b64encode(image_data).decode()
 
-        Raises:
-            LLMAPIError: If there's an error with the OpenAI API call or response parsing.
-        """
-        try:
-            # Validate image data
-            if not image_data:
-                raise ValueError("Image data is empty")
-
-            # Get request configuration by merging default and request-specific configs
-            request_config = self._prepare_request_config(config)
-            current_model = request_config.get("model", self.model)
-            current_temperature = request_config.get("temperature", self.temperature)
-
-            # Ensure vision-compatible model
-            if not ("vision" in current_model or current_model == "gpt-4o"):
-                logger.warning(
-                    f"Model {current_model} may not support vision capabilities. Consider using 'gpt-4-vision-preview' or 'gpt-4o'.")
-
-            # Use default MIME type if none provided
-            if not mime_type:
-                mime_type = "image/jpeg"
-
-            # Base64 encode the binary image data
-            image_b64 = base64.b64encode(image_data).decode('utf-8')
-
-            # Prepare messages
-            messages = []
-
-            # Add system message if provided
-            system_prompt = request_config.get("system_prompt")
-            if system_prompt:
-                messages.append({"role": "system", "content": system_prompt})
-
-            # Add history if provided
-            if history:
-                for msg in history:
-                    if isinstance(msg, dict) and "role" in msg and "content" in msg:
-                        messages.append(msg)
-                    else:
-                        logger.warning(f"Skipping invalid history item: {msg}")
-
-            # Add user message with text and image
-            user_message = {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": text},
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:{mime_type};base64,{image_b64}"
-                        }
-                    }
-                ]
-            }
-            messages.append(user_message)
-
-            logger.debug(f"Sending request to OpenAI API ({current_model}) with text and binary image data.")
-
-            # Create API parameters
-            api_params = {
-                "model": current_model,
-                "messages": messages,
-                "temperature": current_temperature,
-            }
-
-            # Set max_tokens parameter appropriately
-            if current_model.startswith(self.MODELS_USING_MAX_COMPLETION_TOKENS_PREFIXES):
-                api_params["max_completion_tokens"] = request_config.get("max_output_tokens", self.max_output_tokens)
-            else:
-                api_params["max_tokens"] = request_config.get("max_output_tokens", self.max_output_tokens)
-
-            # Add other parameters from config
-            if 'top_p' in request_config:
-                api_params['top_p'] = request_config['top_p']
-            if 'frequency_penalty' in request_config:
-                api_params['frequency_penalty'] = request_config['frequency_penalty']
-            if 'presence_penalty' in request_config:
-                api_params['presence_penalty'] = request_config['presence_penalty']
-            if 'stop' in request_config:
-                api_params['stop'] = request_config['stop']
-
-            # Make API call
-            response = await self.client.chat.completions.create(**api_params)
-
-            logger.debug(
-                f"Received response from OpenAI API. Finish reason: {response.choices[0].finish_reason if response.choices else 'N/A'}")
-
-            # Extract response
-            if response.choices and len(response.choices) > 0:
-                message = response.choices[0].message
-                if message and message.content is not None:
-                    response_text = message.content.strip()
-                    logger.debug(f"Extracted response text (length: {len(response_text)}).")
-                    return response_text
-                else:
-                    logger.warning("OpenAI response message content is missing or None.")
-                    return ""
-            else:
-                logger.warning("OpenAI response does not contain 'choices'.")
-                raise LLMAPIError("OpenAI response structure invalid: No choices found.")
-
-        except ValueError as e:
-            logger.error(f"Image data error: {e}", exc_info=True)
-            raise LLMAPIError(f"Image data error: {e}")
-        except AuthenticationError as e:
-            logger.error(f"OpenAI authentication error: {e}", exc_info=True)
-            raise LLMAPIError(f"Authentication failed: {str(e)}")
-        except RateLimitError as e:
-            logger.warning(f"OpenAI rate limit exceeded: {e}", exc_info=True)
-            raise LLMAPIError(f"Rate limit exceeded: {str(e)}")
-        except BadRequestError as e:
-            logger.error(f"OpenAI bad request error: {e}", exc_info=True)
-            raise LLMAPIError(f"Invalid request: {str(e)}")
-        except APIError as e:
-            logger.error(f"OpenAI API error: {e}", exc_info=True)
-            raise LLMAPIError(f"OpenAI API returned an error: {str(e)}")
-        except OpenAIError as e:
-            logger.error(f"General OpenAI error: {e}", exc_info=True)
-            raise LLMAPIError(f"An OpenAI error occurred: {str(e)}")
-        except Exception as e:
-            logger.error(f"Unexpected error during OpenAI API call: {e}", exc_info=True)
-            raise LLMAPIError(f"An unexpected error occurred: {str(e)}")
-
-    def _prepare_request_config(self, config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """
-        Prepare the request configuration by merging default and request-specific configs.
-
-        Args:
-            config: Request-specific configuration parameters.
-
-        Returns:
-            A dictionary with the merged configuration.
-        """
-        # Start with class defaults, using the generic token name
-        request_config = {
-            "model": self.model,
-            "max_output_tokens": self.max_output_tokens,  # Use generic name here
-            "temperature": self.temperature,
-            "system_prompt": self.default_system_prompt,
-        }
-
-        if config:
-            # Override with request-specific config
-            # Ensure the key used here matches the one expected from the caller ('max_output_tokens')
-            for key, value in config.items():
-                if value is not None:
-                    request_config[key] = value
-
-        return request_config
-
-    def _prepare_messages(
-            self,
-            prompt: str,
-            history: Optional[List[Dict[str, str]]] = None,
-            config: Dict[str, Any] = None,
-    ) -> List[Dict[str, str]]:
-        """
-        Prepare the messages list for the OpenAI API chat completions call.
-
-        Args:
-            prompt: The current text prompt from the user.
-            history: Optional conversation history (list of {'role': str, 'content': str}).
-            config: The prepared request configuration dictionary containing the system prompt.
-
-        Returns:
-            A list of message dictionaries formatted for the OpenAI API.
-        """
+        # Messages ---------------------------------------------------------
         messages = []
-
-        system_prompt = config.get("system_prompt")  # Use potentially updated system prompt
+        system_prompt = request_config.get("system_prompt")
         if system_prompt:
+            if schema is None and force_json and self._supports_json_response(current_model):
+                system_prompt = self._add_json_instruction(system_prompt)
             messages.append({"role": "system", "content": system_prompt})
 
         if history:
             for msg in history:
                 if isinstance(msg, dict) and "role" in msg and "content" in msg:
                     messages.append(msg)
-                else:
-                    logger.warning(f"Skipping invalid history item: {msg}")
 
-        messages.append({"role": "user", "content": prompt})
+        user_text = text
+        if schema is None and force_json and self._supports_json_response(current_model) and not system_prompt:
+            user_text = self._add_json_instruction_to_text(text)
 
+        messages.append(
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": user_text},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:{mime_type};base64,{image_b64}"},
+                    },
+                ],
+            }
+        )
+
+        # API params -------------------------------------------------------
+        api_params: Dict[str, Any] = {
+            "model": current_model,
+            "messages": messages,
+            "temperature": current_temperature,
+        }
+
+        if schema is not None and self._supports_structured_output(current_model):
+            api_params["response_format"] = {
+                "type": "json_schema",
+                "json_schema": schema,
+            }
+        elif force_json and self._supports_json_response(current_model):
+            api_params["response_format"] = {"type": "json_object"}
+
+        if current_model.startswith(self.MODELS_USING_MAX_COMPLETION_TOKENS_PREFIXES):
+            api_params["max_completion_tokens"] = request_config.get(
+                "max_output_tokens", self.max_output_tokens
+            )
+        else:
+            api_params["max_tokens"] = request_config.get(
+                "max_output_tokens", self.max_output_tokens
+            )
+
+        for optional in ("top_p", "frequency_penalty", "presence_penalty", "stop"):
+            if optional in request_config:
+                api_params[optional] = request_config[optional]
+
+        try:
+            response = await self.client.chat.completions.create(**api_params)
+            return self._extract_text_or_raise(response)
+        except Exception as exc:
+            self._handle_openai_exception(exc, current_model)
+
+    # ------------------------------------------------------------------
+    # Configuration helpers
+    # ------------------------------------------------------------------
+    def _prepare_request_config(self, config: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        """Merge instance defaults with per‑request *config*."""
+        request_config: Dict[str, Any] = {
+            "model": self.model,
+            "max_output_tokens": self.max_output_tokens,
+            "temperature": self.temperature,
+            "system_prompt": self.default_system_prompt,
+            "force_json_response": self.force_json_response,
+            "structured_output_schema": self.structured_output_schema,
+        }
+        if config:
+            # Shallow update – callers should not nest
+            request_config.update({k: v for k, v in config.items() if v is not None})
+        return request_config
+
+    def _prepare_messages(
+            self,
+            prompt: str,
+            history: Optional[List[Dict[str, str]]],
+            config: Dict[str, Any],
+            *,
+            force_json: bool,
+    ) -> List[Dict[str, Any]]:
+        """Return the *messages* array for the OpenAI request."""
+        messages: List[Dict[str, Any]] = []
+        system_prompt = config.get("system_prompt")
+        schema = config.get("structured_output_schema")
+        model = config.get("model", self.model)
+
+        if system_prompt:
+            if schema is None and force_json and self._supports_json_response(model):
+                system_prompt = self._add_json_instruction(system_prompt)
+            messages.append({"role": "system", "content": system_prompt})
+
+        if history:
+            for msg in history:
+                if isinstance(msg, dict) and "role" in msg and "content" in msg:
+                    messages.append(msg)
+
+        user_prompt = prompt
+        if schema is None and force_json and self._supports_json_response(model) and not system_prompt:
+            user_prompt = self._add_json_instruction_to_text(prompt)
+
+        messages.append({"role": "user", "content": user_prompt})
         return messages
 
-    def model_name(self):
-        return self.model
+    # ------------------------------------------------------------------
+    # Capability helpers
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _supports_json_response(model: str) -> bool:
+        return any(s in model for s in GPTModel.JSON_SUPPORTED_MODELS)
+
+    @staticmethod
+    def _supports_structured_output(model: str) -> bool:
+        return any(s in model for s in GPTModel.STRUCTURED_OUTPUT_SUPPORTED_MODELS)
+
+    # ------------------------------------------------------------------
+    # Prompt helpers
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _add_json_instruction(prompt: str) -> str:
+        if "json" not in prompt.lower():
+            return prompt.rstrip() + " Always respond with valid JSON format."
+        return prompt
+
+    @staticmethod
+    def _add_json_instruction_to_text(text: str) -> str:
+        if "json" not in text.lower():
+            return text.rstrip() + " Please respond in valid JSON format."
+        return text
+
+    # ------------------------------------------------------------------
+    # Response + error helpers
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _extract_text_or_raise(response: Any) -> str:
+        if response.choices and response.choices[0].message and response.choices[0].message.content is not None:
+            return response.choices[0].message.content.strip()
+        raise LLMAPIError("OpenAI response missing content")
+
+    def _handle_openai_exception(self, exc: Exception, model: str):  # noqa: C901 – long but flat
+        """Translate OpenAI errors to domain‑specific :class:`LLMAPIError`."""
+        if isinstance(exc, AuthenticationError):
+            error_body = getattr(exc, "body", {}) or {}
+            code = error_body.get("code", "unknown")
+            if code == "invalid_api_key":
+                raise LLMAPIError("Invalid OpenAI API key.") from exc
+            if code == "mismatched_organization":
+                raise LLMAPIError("Organization ID mismatch between key and client.") from exc
+            raise LLMAPIError(f"Authentication failed: {exc}") from exc
+
+        if isinstance(exc, RateLimitError):
+            body = getattr(exc, "body", {}) or {}
+            if body.get("type") == "insufficient_quota" or "insufficient_quota" in str(exc):
+                raise LLMAPIError(
+                    "OpenAI quota exceeded – check https://platform.openai.com/account/billing."
+                ) from exc
+            raise LLMAPIError("OpenAI rate limit hit – retry later.") from exc
+
+        if isinstance(exc, BadRequestError):
+            body = getattr(exc, "body", {}) or {}
+            param = body.get("param")
+            msg = body.get("message", str(exc))
+            if (
+                    body.get("code") == "unsupported_parameter"
+                    and param == "max_tokens"
+                    and "max_completion_tokens" in msg
+            ):
+                msg += (
+                    f" (Model '{model}' expects 'max_completion_tokens' – add its prefix to"
+                    " MODELS_USING_MAX_COMPLETION_TOKENS_PREFIXES if needed.)"
+                )
+            raise LLMAPIError(f"Bad request: {msg}") from exc
+
+        if isinstance(exc, APIError):
+            raise LLMAPIError(f"OpenAI API error: {exc}") from exc
+
+        if isinstance(exc, OpenAIError):
+            raise LLMAPIError(f"OpenAI error: {exc}") from exc
+
+        # Catch‑all – re‑raise as LLMAPIError to keep external interface stable
+        logger.exception("Unexpected error during OpenAI call")
+        raise LLMAPIError(f"Unexpected error: {exc}") from exc
